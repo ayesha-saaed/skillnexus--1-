@@ -1,0 +1,173 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "Stores user profile information, including their role, overall progress, and gamification data.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["student", "admin"] },
+        "points": { "type": "number", "description": "Total Nexus IQ experience points." },
+        "level": { "type": "number", "description": "User learning level based on points." },
+        "badges": { "type": "array", "items": { "type": "string" }, "description": "Collection of earned achievement IDs." },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "email", "role"]
+    },
+    "LeaderboardEntry": {
+      "title": "Leaderboard Entry",
+      "description": "Public ranking information for a user.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "points": { "type": "number" },
+        "badgesCount": { "type": "number" },
+        "lastUpdated": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "displayName", "points"]
+    },
+    "UserSkill": {
+      "title": "User Skill",
+      "description": "Represents a skill added by a user with their proficiency level.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "skillName": { "type": "string" },
+        "proficiency": { "type": "string", "enum": ["Beginner", "Intermediate", "Advanced"] },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "skillName", "proficiency"]
+    },
+    "JobRole": {
+      "title": "Job Role",
+      "description": "Predefined job roles with required skills for gap analysis.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "requiredSkills": { "type": "array", "items": { "type": "string" } },
+        "description": { "type": "string" }
+      },
+      "required": ["title", "requiredSkills"]
+    },
+    "Recommendation": {
+      "title": "Learning Recommendation",
+      "description": "AI-generated recommendations based on missing skills.",
+      "type": "object",
+      "properties": {
+        "skillName": { "type": "string" },
+        "resourceLink": { "type": "string" },
+        "description": { "type": "string" },
+        "type": { "type": "string", "enum": ["Course", "Video", "Article"] },
+        "platform": { "type": "string" },
+        "difficulty": { "type": "string", "enum": ["Beginner", "Intermediate", "Advanced"] }
+      },
+      "required": ["skillName", "resourceLink", "type"]
+    },
+    "Trend": {
+      "title": "Industry Trend",
+      "description": "Data for visualizing trending skills in the industry.",
+      "type": "object",
+      "properties": {
+        "skillName": { "type": "string" },
+        "demandScore": { "type": "number" },
+        "category": { "type": "string" }
+      },
+      "required": ["skillName", "demandScore"]
+    },
+    "Resource": {
+      "title": "Learning Resource",
+      "description": "Educational content linked to specific skills.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "url": { "type": "string" },
+        "type": { "type": "string", "enum": ["Course", "Video", "Article"] },
+        "platform": { "type": "string" },
+        "skillsCovered": { "type": "array", "items": { "type": "string" } },
+        "difficulty": { "type": "string", "enum": ["Beginner", "Intermediate", "Advanced"] },
+        "duration": { "type": "string" },
+        "rating": { "type": "number" }
+      },
+      "required": ["title", "type", "platform", "skillsCovered"]
+    },
+    "MasterSkill": {
+      "title": "Master Skill",
+      "description": "Standardized skill definition for matching and trends.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "category": { "type": "string" },
+        "description": { "type": "string" },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "industryWeight": { "type": "number" },
+        "trendScore": { "type": "number" }
+      },
+      "required": ["name", "category"]
+    },
+    "IndustryDemand": {
+      "title": "Industry Demand",
+      "description": "Market demand scores and growth rates over time.",
+      "type": "object",
+      "properties": {
+        "skill": { "type": "string" },
+        "demandScore": { "type": "number" },
+        "growthRate": { "type": "number" },
+        "year": { "type": "number" }
+      },
+      "required": ["skill", "demandScore", "year"]
+    },
+    "Progress": {
+      "title": "Learning Progress",
+      "description": "Tracking user engagement and completion of resources.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "resourceId": { "type": "string" },
+        "status": { "type": "string", "enum": ["Not Started", "In Progress", "Completed"] },
+        "progress": { "type": "number" },
+        "timeSpent": { "type": "number" },
+        "lastUpdated": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "resourceId", "status"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Individual user accounts."
+    },
+    "/users/{userId}/skills/{skillId}": {
+      "schema": "UserSkill",
+      "description": "Skills possessed by a specific user."
+    },
+    "/jobRoles/{roleId}": {
+      "schema": "JobRole",
+      "description": "Standard industry job roles."
+    },
+    "/skills/{skillId}": {
+      "schema": "MasterSkill",
+      "description": "Canonical list of skills."
+    },
+    "/industryDemand/{demandId}": {
+      "schema": "IndustryDemand",
+      "description": "Historical market demand data."
+    },
+    "/resources/{resourceId}": {
+      "schema": "Resource",
+      "description": "Pool of learning resources."
+    },
+    "/progress/{progressId}": {
+      "schema": "Progress",
+      "description": "Global progress tracking documents."
+    },
+    "/leaderboard/{userId}": {
+      "schema": "LeaderboardEntry",
+      "description": "Public ranking of users by Nexus IQ."
+    }
+  }
+}
