@@ -172,3 +172,8 @@ drop policy if exists "skill events owner read/write" on public.skill_developmen
 create policy "skill events owner read/write" on public.skill_development_events
 for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
+-- Target job role / active path (Gap Checker selection)
+alter table public.profiles add column if not exists active_job_role_id uuid;
+alter table public.profiles add column if not exists active_job_role_name text;
+alter table public.profiles add column if not exists active_path_domain text;
+

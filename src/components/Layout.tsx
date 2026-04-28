@@ -1,9 +1,10 @@
 import React from 'react';
 import { User, signOut, supabase } from '../lib/firebase';
-import { LayoutDashboard, BarChart3, LineChart, PlusCircle, LogOut, Code2, Library, ShieldCheck, Trophy, Zap, Award, Github, Linkedin, Mail, Menu, X } from 'lucide-react';
+import { LayoutDashboard, BarChart3, LineChart, PlusCircle, LogOut, Code2, Library, ShieldCheck, Zap, Award, Github, Linkedin, Mail, Menu, X } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Logo } from './Logo';
 import { SkillAgent } from './SkillAgent';
+import { ACTIVE_PATH_EVENT, readActivePathFromStorage } from '../lib/activePath';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -16,6 +17,18 @@ interface LayoutProps {
 export function Layout({ children, user, userRole, onNavigate, currentPage }: LayoutProps) {
   const [userData, setUserData] = React.useState<any>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
+  const [activePathLabel, setActivePathLabel] = React.useState('Set in Gap Checker');
+
+  const refreshActivePathLabel = React.useCallback(() => {
+    const ls = readActivePathFromStorage();
+    const name = ls.roleName || (userData as any)?.active_job_role_name;
+    const domain = ls.domain || (userData as any)?.active_path_domain;
+    if (name) {
+      setActivePathLabel(domain ? `${name} · ${domain}` : name);
+    } else {
+      setActivePathLabel('Set in Gap Checker');
+    }
+  }, [userData]);
 
   React.useEffect(() => {
     let mounted = true;
@@ -36,13 +49,22 @@ export function Layout({ children, user, userRole, onNavigate, currentPage }: La
     };
   }, [user.id]);
 
+  React.useEffect(() => {
+    refreshActivePathLabel();
+  }, [refreshActivePathLabel, currentPage]);
+
+  React.useEffect(() => {
+    const onPath = () => refreshActivePathLabel();
+    window.addEventListener(ACTIVE_PATH_EVENT, onPath);
+    return () => window.removeEventListener(ACTIVE_PATH_EVENT, onPath);
+  }, [refreshActivePathLabel]);
+
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'add-skill', label: 'My Skills', icon: Code2 },
     { id: 'analysis', label: 'Gap Checker', icon: BarChart3 },
     { id: 'library', label: 'Resource Library', icon: Library },
     { id: 'trends', label: 'Market Trends', icon: LineChart },
-    { id: 'leaderboard', label: 'Hall of Fame', icon: Trophy },
   ];
 
   if (userRole === 'admin') {
@@ -126,9 +148,14 @@ export function Layout({ children, user, userRole, onNavigate, currentPage }: La
                     <p className="text-sm font-black text-white leading-none whitespace-nowrap">{userData?.level || 1}</p>
                 </div>
             </div>
-            <div className="hidden lg:flex items-center space-x-2">
-              <span className="text-[10px] text-gray-500 uppercase tracking-widest">Active Path:</span>
-              <span className="text-[10px] font-bold text-white uppercase bg-white/5 px-2 py-0.5 rounded border border-white/10">Full Stack</span>
+            <div className="hidden sm:flex items-center gap-2 min-w-0 max-w-[min(22rem,40vw)]">
+              <span className="text-[10px] text-gray-500 uppercase tracking-widest shrink-0">Active Path</span>
+              <span
+                className="text-[10px] font-bold text-white truncate bg-white/5 px-2 py-0.5 rounded border border-white/10"
+                title={activePathLabel}
+              >
+                {activePathLabel}
+              </span>
             </div>
           </div>
         </header>
