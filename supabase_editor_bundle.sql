@@ -42,3 +42,8 @@ on conflict (role_name) do update set
   required_skills = excluded.required_skills,
   domain = excluded.domain,
   difficulty = excluded.difficulty;
+
+-- 3) Profile columns for active career path (selected job role)
+alter table public.profiles add column if not exists active_job_role_id uuid;
+alter table public.profiles add column if not exists active_job_role_name text;
+alter table public.profiles add column if not exists active_path_domain text;

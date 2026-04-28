@@ -9,14 +9,13 @@ import { IndustryTrends } from './pages/IndustryTrends';
 import { AddSkill } from './pages/AddSkill';
 import { Library } from './pages/Library';
 import { Admin } from './pages/Admin';
-import { Leaderboard } from './components/Leaderboard';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [currentPage, setCurrentPage] = useState<'dashboard' | 'login' | 'register' | 'analysis' | 'trends' | 'add-skill' | 'library' | 'admin' | 'leaderboard'>('login');
+  const [currentPage, setCurrentPage] = useState<'dashboard' | 'login' | 'register' | 'analysis' | 'trends' | 'add-skill' | 'library' | 'admin'>('login');
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(async (u) => {
@@ -82,7 +81,6 @@ export default function App() {
       case 'trends': return <IndustryTrends onNavigate={setCurrentPage} />;
       case 'add-skill': return <AddSkill onNavigate={setCurrentPage} user={user!} />;
       case 'library': return <Library onNavigate={setCurrentPage} />;
-      case 'leaderboard': return <Leaderboard />;
       case 'admin': return <Admin onNavigate={setCurrentPage} />;
       default: return <Login onNavigate={setCurrentPage} />;
     }

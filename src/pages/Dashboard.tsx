@@ -9,22 +9,19 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import {
-  TrendingUp,
   Award,
   BookOpen,
   Star,
   ArrowRight,
   Zap,
   Target,
-  Trophy,
-  Medal,
-  Search,
   PlusCircle,
-  Sparkles,
   Loader2,
+  GraduationCap,
+  LineChart,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { BADGES } from '../services/gamificationService';
+import { learningService } from '../services/learningService';
 
 // ─── Proper TypeScript Interfaces ───
 interface UserSkill {
@@ -48,6 +45,9 @@ interface UserProfile {
   level?: number;
   badges?: string[];
   createdAt?: string;
+  active_job_role_id?: string | null;
+  active_job_role_name?: string | null;
+  active_path_domain?: string | null;
 }
 
 interface DashboardStats {
@@ -123,6 +123,12 @@ export const Dashboard = React.memo(function Dashboard({ user, onNavigate }: Das
     activeCourses: 0,
     openGaps: 0,
   });
+  const [learningAnalytics, setLearningAnalytics] = useState({
+    completedCount: 0,
+    totalEnrolled: 0,
+    totalTime: 0,
+  });
+  const [skillDevEvents, setSkillDevEvents] = useState<any[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -131,10 +137,16 @@ export const Dashboard = React.memo(function Dashboard({ user, onNavigate }: Das
       setLoading(true);
       try {
         // ✅ Parallel queries instead of sequential
-        const [skillsRes, progRes, profileRes] = await Promise.all([
+        const [skillsRes, progRes, profileRes, devRes] = await Promise.all([
           supabase.from('user_skills').select('*').eq('user_id', user.id),
           supabase.from('progress').select('*').eq('user_id', user.id),
           supabase.from('profiles').select('*').eq('id', user.id).maybeSingle(),
+          supabase
+            .from('skill_development_events')
+            .select('skill_name,event_type,created_at,detail')
+            .eq('user_id', user.id)
+            .order('created_at', { ascending: false })
+            .limit(12),
         ]);
 
         if (cancelled) return;
@@ -142,6 +154,15 @@ export const Dashboard = React.memo(function Dashboard({ user, onNavigate }: Das
         if (skillsRes.error) throw skillsRes.error;
         if (progRes.error) throw progRes.error;
         if (profileRes.error) throw profileRes.error;
+        if (!devRes.error && devRes.data) setSkillDevEvents(devRes.data);
+        else setSkillDevEvents([]);
+
+        try {
+          const analytics = await learningService.getLearningAnalytics(user.id);
+          if (!cancelled) setLearningAnalytics(analytics);
+        } catch {
+          if (!cancelled) setLearningAnalytics({ completedCount: 0, totalEnrolled: 0, totalTime: 0 });
+        }
 
         const skillsData = (skillsRes.data || []).map((d: any) => ({
           id: d.id,
@@ -321,6 +342,88 @@ export const Dashboard = React.memo(function Dashboard({ user, onNavigate }: Das
         </div>
       </div>
 
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="theme-card">
+          <h2 className="text-sm font-bold text-white uppercase tracking-widest mb-2 flex items-center gap-2">
+            <Target className="w-4 h-4 text-blue-500" />
+            Active career path
+          </h2>
+          <p className="text-[11px] text-zinc-500 leading-relaxed">
+            The job role you choose in Gap Checker is saved as your active path and shown in the header.
+          </p>
+          {profile?.active_job_role_name ? (
+            <div className="mt-5 space-y-1">
+              <p className="text-lg font-bold text-white tracking-tight">{profile.active_job_role_name}</p>
+              {profile.active_path_domain ? (
+                <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">{profile.active_path_domain}</p>
+              ) : null}
+            </div>
+          ) : (
+            <p className="mt-5 text-[11px] text-zinc-500">No target role yet. Open Gap Checker and pick a role.</p>
+          )}
+          <button
+            type="button"
+            onClick={() => onNavigate('analysis')}
+            className="mt-6 w-full rounded-xl border border-white/10 bg-white/5 py-3 text-[10px] font-bold uppercase tracking-widest text-zinc-300 hover:bg-white/10 hover:text-white transition-all"
+          >
+            Open Gap Checker
+          </button>
+        </div>
+
+        <div className="theme-card">
+          <h2 className="text-sm font-bold text-white uppercase tracking-widest mb-2 flex items-center gap-2">
+            <GraduationCap className="w-4 h-4 text-emerald-400" />
+            Learning &amp; skill development
+          </h2>
+          <p className="text-[11px] text-zinc-500 leading-relaxed mb-5">
+            Library progress plus a timeline when skill events are enabled in Supabase.
+          </p>
+          <div className="grid grid-cols-3 gap-3">
+            <div className="rounded-lg border border-white/5 bg-black/20 p-3 text-center">
+              <p className="text-2xl font-black text-emerald-400">{learningAnalytics.completedCount}</p>
+              <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-500 mt-1">Done</p>
+            </div>
+            <div className="rounded-lg border border-white/5 bg-black/20 p-3 text-center">
+              <p className="text-2xl font-black text-blue-400">{learningAnalytics.totalEnrolled}</p>
+              <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-500 mt-1">Enrolled</p>
+            </div>
+            <div className="rounded-lg border border-white/5 bg-black/20 p-3 text-center">
+              <p className="text-2xl font-black text-amber-400">{learningAnalytics.totalTime}</p>
+              <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-500 mt-1">Minutes</p>
+            </div>
+          </div>
+          <div className="mt-5 border-t border-white/5 pt-5">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-3 flex items-center gap-2">
+              <LineChart className="w-3.5 h-3.5" />
+              Recent skill activity
+            </p>
+            {skillDevEvents.length > 0 ? (
+              <ul className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                {skillDevEvents.map((ev: any) => (
+                  <li
+                    key={ev.created_at + ev.skill_name + ev.event_type}
+                    className="flex justify-between gap-2 text-[10px] text-zinc-400"
+                  >
+                    <span className="truncate font-semibold text-zinc-200">{ev.skill_name}</span>
+                    <span className="shrink-0 uppercase tracking-tighter text-zinc-500">{ev.event_type}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-[10px] text-zinc-600 uppercase tracking-widest">No skill timeline rows yet (run SQL bundle if needed).</p>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => onNavigate('library')}
+            className="mt-5 w-full inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600/90 py-3 text-[10px] font-bold uppercase tracking-widest text-white hover:bg-blue-600 transition-all"
+          >
+            <BookOpen className="w-3.5 h-3.5" />
+            Resource library
+          </button>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Radar Chart */}
         <div className="lg:col-span-8 theme-card relative flex flex-col">
@@ -484,67 +587,7 @@ export const Dashboard = React.memo(function Dashboard({ user, onNavigate }: Das
         </div>
       </div>
 
-      {/* Gamification: Achievements & Badges */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="theme-card bg-zinc-900/60 border-blue-500/10">
-          <div className="flex items-center justify-between mb-8">
-            <h2 className="text-sm font-bold text-white uppercase tracking-widest flex items-center gap-2">
-              <Trophy className="w-4 h-4 text-amber-500" />
-              Nexus Achievements
-            </h2>
-            <button
-              onClick={() => onNavigate('leaderboard')}
-              className="text-[10px] font-black text-blue-500 uppercase tracking-widest hover:text-white transition-colors"
-            >
-              View Leaderboard
-            </button>
-          </div>
-
-          <div className="flex flex-wrap gap-4">
-            {BADGES.map((badge) => {
-              const isEarned = profile?.badges?.includes(badge.id);
-              const Icon =
-                badge.icon === 'Sparkles'
-                  ? Sparkles
-                  : badge.icon === 'Search'
-                    ? Search
-                    : badge.icon === 'CheckCircle'
-                      ? Award
-                      : badge.icon === 'Trophy'
-                        ? Medal
-                        : Trophy;
-
-              return (
-                <div
-                  key={badge.id}
-                  className={cn(
-                    'group relative w-12 h-12 rounded-xl flex items-center justify-center border transition-all cursor-help',
-                    isEarned
-                      ? 'bg-amber-500/10 border-amber-500/30 text-amber-500'
-                      : 'bg-zinc-950 border-white/5 text-zinc-800 opacity-40 grayscale'
-                  )}
-                >
-                  <Icon className="w-6 h-6" />
-                  {/* Tooltip */}
-                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-black border border-white/10 p-3 rounded-xl opacity-0 group-hover:opacity-100 pointer-events-none transition-all z-20 text-center">
-                    <p className="text-[10px] font-black text-white uppercase tracking-widest mb-1">
-                      {badge.name}
-                    </p>
-                    <p className="text-[9px] text-zinc-500 leading-tight">
-                      {badge.description}
-                    </p>
-                    {!isEarned && (
-                      <p className="text-[8px] text-amber-500/60 font-black mt-2 uppercase tracking-tighter">
-                        Locked
-                      </p>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
+      <div className="grid grid-cols-1 gap-6">
         <div className="theme-card bg-indigo-600/5 border-indigo-500/10 flex flex-col justify-between">
           <div className="space-y-6">
             <h2 className="text-sm font-bold text-white uppercase tracking-widest flex items-center gap-2">

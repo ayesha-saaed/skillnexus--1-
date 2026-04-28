@@ -32,6 +32,7 @@ import {
   Loader2
 } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { persistActivePath } from '../lib/activePath';
 
 interface SkillAnalysisProps {
   onNavigate: (page: any) => void;
@@ -129,6 +130,18 @@ export function SkillAnalysis({ onNavigate }: SkillAnalysisProps) {
     }
     fetchData();
   }, []);
+
+  useEffect(() => {
+    if (!selectedRole || !currentUserId) return;
+    persistActivePath(
+      {
+        id: selectedRole.id,
+        roleName: selectedRole.roleName,
+        domain: selectedRole.domain || '',
+      },
+      currentUserId
+    );
+  }, [selectedRole?.id, selectedRole?.roleName, selectedRole?.domain, currentUserId]);
 
   useEffect(() => {
     setAnalysisRequested(false);

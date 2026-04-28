@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabase,getCurrentUser } from '../lib/supabase';
 import { 
   Book, CheckCircle, ExternalLink, GraduationCap, PlayCircle, Search, 
   Sparkles, ShieldAlert, Plus, Filter, Trophy, Zap, Clock, Star, 
@@ -9,6 +9,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { learningService, Progress } from '../services/learningService';
 import { gamificationService } from '../services/gamificationService';
+import { CURATED_RESOURCES } from '../lib/data_seeder';
 
 interface Resource {
   id: string;
@@ -89,7 +90,27 @@ export function Library({ onNavigate }: LibraryProps) {
   rating: doc.rating,
   domain: doc.domain
       } as Resource));
-      setResources(resData);
+
+      const curatedResources = (CURATED_RESOURCES || []).map((r: any, index: number) => ({
+        id: `curated-${index}-${r.url || r.title}`,
+        title: r.title,
+        description: r.description || `${r.title} learning resource`,
+        url: r.url,
+        type: r.type || 'Course',
+        skillsCovered: r.skillsCovered || [],
+        difficulty: r.difficulty || 'Beginner',
+        platform: r.platform || 'Unknown',
+        duration: r.duration,
+        rating: r.rating,
+        domain: r.domain || 'Full Stack',
+      } as Resource));
+
+      const mergedByUrl = new Map<string, Resource>();
+      [...dbResources, ...curatedResources].forEach((resource) => {
+        if (!resource?.url) return;
+        mergedByUrl.set(resource.url, resource);
+      });
+      setResources(Array.from(mergedByUrl.values()));
 
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
