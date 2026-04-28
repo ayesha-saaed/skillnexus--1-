@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { supabase, getCurrentUser } from '../lib/firebase';
+import { supabase } from '../lib/supabase';
 import { 
   Book, CheckCircle, ExternalLink, GraduationCap, PlayCircle, Search, 
   Sparkles, ShieldAlert, Plus, Filter, Trophy, Zap, Clock, Star, 
@@ -71,20 +71,23 @@ export function Library({ onNavigate }: LibraryProps) {
       const skillsList = (skillsData || []).map((row: any) => row.skill_name);
       setUserSkills(skillsList);
 
-      const { data: resDataRaw, error: resError } = await supabase.from('resources').select('*');
+      const { data: resDataRaw, error: resError } = await supabase
+  .from('learning_resources')
+  .select('*')
+  .order('rating', { ascending: false });
       if (resError) throw resError;
-      const resData = (resDataRaw || []).map((doc: any) => ({
-        id: doc.id,
-        title: doc.title,
-        description: doc.description,
-        url: doc.url,
-        type: doc.type,
-        skillsCovered: doc.skills_covered || [],
-        difficulty: doc.difficulty,
-        platform: doc.platform,
-        duration: doc.duration,
-        rating: doc.rating,
-        domain: doc.domain
+     const resData = (resDataRaw || []).map((doc: any) => ({
+  id: doc.id,
+  title: doc.title,
+  description: doc.description,
+  url: doc.url,
+  type: doc.resource_type,
+  skillsCovered: doc.skills_covered || [],
+  difficulty: doc.level,
+  platform: doc.provider,
+  duration: doc.duration,
+  rating: doc.rating,
+  domain: doc.domain
       } as Resource));
       setResources(resData);
 
