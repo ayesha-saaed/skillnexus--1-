@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { db, auth } from '../lib/firebase';
-import { collection, query, getDocs, addDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { User, supabase } from '../lib/firebase';
 import { motion } from 'motion/react';
 import { Plus, Trash2, Search, Award } from 'lucide-react';
 import { cn } from '../lib/utils';
@@ -8,41 +7,59 @@ import { gamificationService } from '../services/gamificationService';
 
 interface AddSkillProps {
   onNavigate: (page: any) => void;
+  user: User;
 }
 
-export function AddSkill({ onNavigate }: AddSkillProps) {
+export function AddSkill({ onNavigate, user }: AddSkillProps) {
   const [skills, setSkills] = useState<any[]>([]);
   const [newSkill, setNewSkill] = useState('');
   const [proficiency, setProficiency] = useState('Beginner');
   const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
   useEffect(() => {
     fetchSkills();
-  }, []);
+  }, [user.id]);
 
   async function fetchSkills() {
-    if (!auth.currentUser) return;
-    const q = query(collection(db, 'users', auth.currentUser.uid, 'skills'));
-    const snap = await getDocs(q);
-    setSkills(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    try {
+      const { data, error } = await supabase
+        .from('user_skills')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('updated_at', { ascending: false });
+      if (error) throw error;
+      setSkills((data || []).map((s: any) => ({ id: s.id, skillName: s.skill_name, proficiency: s.proficiency })));
+    } catch (e: any) {
+      const message = e?.message || 'Unknown error';
+      if (message.includes('Missing or insufficient permissions')) {
+        setErrorMessage('Firestore permission denied while loading skills. Please verify Firestore rules deployment for this project.');
+      } else {
+        setErrorMessage(`Failed to load skills: ${message}`);
+      }
+    }
   }
 
   async function handleAdd() {
-    if (!newSkill.trim() || !auth.currentUser) return;
+    const trimmedSkill = newSkill.trim();
+    if (!trimmedSkill) return;
     setLoading(true);
+    setErrorMessage('');
     try {
-      await addDoc(collection(db, 'users', auth.currentUser.uid, 'skills'), {
-        skillName: newSkill,
+      const { error } = await supabase.from('user_skills').insert({
+        user_id: user.id,
+        skill_name: trimmedSkill,
         proficiency,
-        updatedAt: new Date().toISOString()
+        updated_at: new Date().toISOString()
       });
+      if (error) throw error;
 
-      await gamificationService.awardPoints(auth.currentUser.uid, 20, 'Skill Registration');
+      await gamificationService.awardPoints(user.id, 20, 'Skill Registration');
 
       if (proficiency === 'Advanced') {
           const advancedSkills = skills.filter(s => s.proficiency === 'Advanced').length + 1;
           if (advancedSkills >= 3) {
-              await gamificationService.awardBadge(auth.currentUser.uid, 'polymath');
+              await gamificationService.awardBadge(user.id, 'polymath');
           }
       }
 
@@ -50,15 +67,19 @@ export function AddSkill({ onNavigate }: AddSkillProps) {
       await fetchSkills();
     } catch (e: any) {
       console.error('Add skill error:', e);
-      alert('Failed to add skill: ' + (e.message || 'Unknown error'));
+      const message = e?.message || 'Unknown error';
+      if (message.includes('Missing or insufficient permissions')) {
+        setErrorMessage('Firestore permission denied. Make sure you are logged in and Firestore rules are deployed for this Firebase project.');
+      } else {
+        setErrorMessage(`Failed to add skill: ${message}`);
+      }
     } finally {
       setLoading(false);
     }
   }
 
   async function handleDelete(id: string) {
-    if (!auth.currentUser) return;
-    await deleteDoc(doc(db, 'users', auth.currentUser.uid, 'skills', id));
+    await supabase.from('user_skills').delete().eq('id', id).eq('user_id', user.id);
     fetchSkills();
   }
 
@@ -71,6 +92,9 @@ export function AddSkill({ onNavigate }: AddSkillProps) {
 
       <div className="theme-card bg-[var(--color-bg-card)]/50">
         <h2 className="text-sm font-bold text-white uppercase tracking-widest mb-6 px-1">Add a New Skill</h2>
+        {errorMessage && (
+          <p className="mb-4 px-1 text-xs text-rose-400">{errorMessage}</p>
+        )}
         <div className="grid grid-cols-1 md:grid-cols-12 gap-5">
           <div className="md:col-span-6">
             <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2 px-1">Skill Name</label>
@@ -88,6 +112,7 @@ export function AddSkill({ onNavigate }: AddSkillProps) {
           <div className="md:col-span-4">
             <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2 px-1">Proficiency Level</label>
             <select
+              aria-label="Proficiency level"
               value={proficiency}
               onChange={(e) => setProficiency(e.target.value)}
               className="w-full px-4 py-3 bg-black/30 border border-white/10 rounded-xl text-sm focus:border-blue-500 outline-none transition-all appearance-none text-white"
@@ -99,6 +124,7 @@ export function AddSkill({ onNavigate }: AddSkillProps) {
           </div>
           <div className="md:col-span-2 flex items-end">
             <button
+              aria-label="Add skill"
               onClick={handleAdd}
               disabled={loading || !newSkill}
               className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center disabled:opacity-50"
@@ -136,6 +162,7 @@ export function AddSkill({ onNavigate }: AddSkillProps) {
                   </div>
                 </div>
                 <button
+                  aria-label={`Delete ${skill.skillName}`}
                   onClick={() => handleDelete(skill.id)}
                   className="p-2.5 text-zinc-600 hover:text-rose-500 hover:bg-rose-500/10 rounded-lg transition-all"
                 >

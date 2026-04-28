@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { onAuthStateChanged, User } from 'firebase/auth';
-import { auth, db, handleFirestoreError } from './lib/firebase';
-import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { onAuthStateChanged, User, supabase } from './lib/firebase';
 import { Layout } from './components/Layout';
 import { Login } from './pages/Login';
 import { Register } from './pages/Register';
@@ -21,51 +19,41 @@ export default function App() {
   const [currentPage, setCurrentPage] = useState<'dashboard' | 'login' | 'register' | 'analysis' | 'trends' | 'add-skill' | 'library' | 'admin' | 'leaderboard'>('login');
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (u) => {
+    const unsubscribe = onAuthStateChanged(async (u) => {
       try {
         setUser(u);
         if (u) {
-          // Ensure user profile exists
-          const userDocRef = doc(db, 'users', u.uid);
           let role = 'student';
-          // Auto-promote specific owner to admin
           const isAdminEmail = u.email === 'saeedayesha995@gmail.com';
+          const { data: existing } = await supabase.from('profiles').select('*').eq('id', u.id).maybeSingle();
 
-          try {
-            const userDoc = await getDoc(userDocRef);
-            
-            if (!userDoc || !userDoc.exists()) {
-              role = isAdminEmail ? 'admin' : 'student';
-              await setDoc(userDocRef, {
-                name: u.displayName || 'New User',
-                email: u.email,
-                role: role,
-                points: 0,
-                level: 1,
-                badges: [],
-                createdAt: new Date().toISOString()
-              });
-            } else {
-              const data = userDoc.data();
-              role = data?.role || 'student';
-              // Ensure original owner is always admin if they lost the role
-              if (isAdminEmail && role !== 'admin') {
-                role = 'admin';
-                await updateDoc(userDocRef, { role: 'admin' });
-              }
+          if (!existing) {
+            role = isAdminEmail ? 'admin' : 'student';
+            await supabase.from('profiles').insert({
+              id: u.id,
+              name: u.user_metadata?.full_name || u.email?.split('@')[0] || 'New User',
+              email: u.email,
+              role,
+              points: 0,
+              level: 1,
+              badges: [],
+              created_at: new Date().toISOString()
+            });
+          } else {
+            role = existing.role || 'student';
+            if (isAdminEmail && role !== 'admin') {
+              role = 'admin';
+              await supabase.from('profiles').update({ role: 'admin' }).eq('id', u.id);
             }
-            setUserRole(role);
-          } catch (firestoreErr: any) {
-            console.warn('Firestore profile error (non-blocking):', firestoreErr.message);
-            setUserRole(isAdminEmail ? 'admin' : 'student');
           }
+          setUserRole(role);
           setCurrentPage('dashboard');
         } else {
           setUserRole(null);
           setCurrentPage('login');
         }
       } catch (err: any) {
-        console.error("Critical Auth/Firestore Failure:", err.message);
+        console.error("Critical Auth/Database Failure:", err.message);
       } finally {
         setLoading(false);
       }
@@ -92,7 +80,7 @@ export default function App() {
       case 'dashboard': return <Dashboard user={user!} onNavigate={setCurrentPage} />;
       case 'analysis': return <SkillAnalysis onNavigate={setCurrentPage} />;
       case 'trends': return <IndustryTrends onNavigate={setCurrentPage} />;
-      case 'add-skill': return <AddSkill onNavigate={setCurrentPage} />;
+      case 'add-skill': return <AddSkill onNavigate={setCurrentPage} user={user!} />;
       case 'library': return <Library onNavigate={setCurrentPage} />;
       case 'leaderboard': return <Leaderboard />;
       case 'admin': return <Admin onNavigate={setCurrentPage} />;

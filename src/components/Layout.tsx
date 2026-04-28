@@ -1,12 +1,9 @@
 import React from 'react';
-import { User, signOut } from 'firebase/auth';
-import { auth } from '../lib/firebase';
+import { User, signOut, supabase } from '../lib/firebase';
 import { LayoutDashboard, BarChart3, LineChart, PlusCircle, LogOut, Code2, Library, ShieldCheck, Trophy, Zap, Award, Github, Linkedin, Mail, Menu, X } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Logo } from './Logo';
 import { SkillAgent } from './SkillAgent';
-import { db } from '../lib/firebase';
-import { doc, onSnapshot } from 'firebase/firestore';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -21,17 +18,23 @@ export function Layout({ children, user, userRole, onNavigate, currentPage }: La
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
 
   React.useEffect(() => {
-    const unsub = onSnapshot(
-      doc(db, 'users', user.uid),
-      (doc) => {
-        setUserData(doc.data());
-      },
-      (err) => {
-        console.error('Layout userData listener error:', err.message);
+    let mounted = true;
+    const fetchProfile = async () => {
+      const { data, error } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
+      if (!mounted) return;
+      if (error) {
+        console.error('Layout userData fetch error:', error.message);
+        return;
       }
-    );
-    return unsub;
-  }, [user.uid]);
+      setUserData(data);
+    };
+    fetchProfile();
+    const timer = setInterval(fetchProfile, 10000);
+    return () => {
+      mounted = false;
+      clearInterval(timer);
+    };
+  }, [user.id]);
 
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -83,7 +86,7 @@ export function Layout({ children, user, userRole, onNavigate, currentPage }: La
               </div>
             </div>
             <button 
-              onClick={() => signOut(auth)}
+              onClick={() => signOut()}
               className="w-full flex items-center gap-2 text-[var(--color-text-secondary)] hover:text-white transition-colors text-xs font-semibold uppercase tracking-widest"
             >
               <LogOut className="w-3.5 h-3.5" />
@@ -230,7 +233,7 @@ export function Layout({ children, user, userRole, onNavigate, currentPage }: La
                 </div>
               </div>
               <button
-                onClick={() => signOut(auth)}
+                onClick={() => signOut()}
                 className="w-full flex items-center gap-2 text-[var(--color-text-secondary)] hover:text-white transition-colors text-xs font-semibold uppercase tracking-widest"
               >
                 <LogOut className="w-3.5 h-3.5" />

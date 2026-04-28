@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { db, auth } from '../lib/firebase';
-import { collection, query, getDocs, doc, getDoc } from 'firebase/firestore';
+import { supabase, getCurrentUser } from '../lib/firebase';
 import { motion } from 'motion/react';
 import {
   Radar,
@@ -66,19 +65,24 @@ export function SkillAnalysis({ onNavigate }: SkillAnalysisProps) {
   const [selectedRole, setSelectedRole] = useState<JobRole | null>(null);
   const [loading, setLoading] = useState(true);
   const [analysis, setAnalysis] = useState<any>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchData() {
-      if (!auth.currentUser) return;
+      const user = await getCurrentUser();
+      if (!user) return;
+      setCurrentUserId(user.id);
       setLoading(true);
       try {
-        const [skillsSnap, rolesSnap] = await Promise.all([
-          getDocs(query(collection(db, 'users', auth.currentUser.uid, 'skills'))),
-          getDocs(collection(db, 'jobRoles')),
+        const [skillsRes, rolesRes] = await Promise.all([
+          supabase.from('user_skills').select('*').eq('user_id', user.id),
+          supabase.from('job_roles').select('*'),
         ]);
+        if (skillsRes.error) throw skillsRes.error;
+        if (rolesRes.error) throw rolesRes.error;
 
-        const skillsData = skillsSnap.docs.map(d => ({ id: d.id, ...d.data() } as UserSkill));
-        const rolesData = rolesSnap.docs.map(d => ({ id: d.id, ...d.data() } as JobRole));
+        const skillsData = (skillsRes.data || []).map((d: any) => ({ id: d.id, skillName: d.skill_name, proficiency: d.proficiency } as UserSkill));
+        const rolesData = (rolesRes.data || []).map((d: any) => ({ id: d.id, roleName: d.role_name, requiredSkills: d.required_skills || [], difficulty: d.difficulty, domain: d.domain } as JobRole));
 
         setSkills(skillsData);
         setRoles(rolesData);
@@ -97,34 +101,57 @@ export function SkillAnalysis({ onNavigate }: SkillAnalysisProps) {
   }, []);
 
   useEffect(() => {
-    if (!selectedRole || skills.length === 0) return;
+    if (!selectedRole || !currentUserId) return;
 
-    const userSkillMap = new Map(skills.map(s => [s.skillName.toLowerCase(), s.proficiency]));
-    const required = selectedRole.requiredSkills || [];
+    const runAnalysis = async () => {
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData.session?.access_token;
+        if (!token) return;
 
-    const matched = required.filter(r => userSkillMap.has(r.toLowerCase()));
-    const missing = required.filter(r => !userSkillMap.has(r.toLowerCase()));
-
-    const gapData = required.map(skill => {
-      const userSkill = skills.find(s => s.skillName.toLowerCase() === skill.toLowerCase());
-      return {
-        skill,
-        userLevel: userSkill ? proficiencyMap[userSkill.proficiency] : 0,
-        requiredLevel: 80,
-        gap: userSkill ? Math.max(0, 80 - proficiencyMap[userSkill.proficiency]) : 80,
-      };
-    });
-
-    const matchScore = required.length > 0 ? Math.round((matched.length / required.length) * 100) : 0;
-
-    setAnalysis({
-      matchScore,
-      matched,
-      missing,
-      gapData,
-      totalRequired: required.length,
-    });
-  }, [selectedRole, skills]);
+        const response = await fetch('/api/analyze', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            userId: currentUserId,
+            jobRoleId: selectedRole.id,
+            userSkills: skills
+          }),
+        });
+        if (!response.ok) {
+          throw new Error(`Analysis request failed: ${response.status}`);
+        }
+        const result = await response.json();
+        const required = selectedRole.requiredSkills || [];
+        const gapData = required.map(skill => {
+          const userSkill = skills.find(s => s.skillName.toLowerCase() === skill.toLowerCase());
+          return {
+            skill,
+            userLevel: userSkill ? proficiencyMap[userSkill.proficiency] : 0,
+            requiredLevel: 80,
+            gap: userSkill ? Math.max(0, 80 - proficiencyMap[userSkill.proficiency]) : 80,
+          };
+        });
+        setAnalysis({
+          matchScore: Math.round((result.similarity || 0) * 100),
+          matched: result.matched || [],
+          missing: result.missing || [],
+          weakSkills: result.weakSkills || [],
+          recommendations: result.recommendations || [],
+          richRecommendations: result.richRecommendations || [],
+          gapScore: result.gapScore || 0,
+          gapData,
+          totalRequired: required.length,
+        });
+      } catch (err) {
+        console.error('Skill analysis API error:', err);
+      }
+    };
+    runAnalysis();
+  }, [selectedRole, skills, currentUserId]);
 
   if (loading) {
     return (

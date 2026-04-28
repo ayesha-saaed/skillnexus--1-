@@ -2,9 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { GoogleGenAI } from "@google/genai";
 import { MessageSquare, X, Send, Bot, User, Sparkles, Loader2, TrendingUp, Calendar, Map } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { collection, query, getDocs, limit } from 'firebase/firestore';
-import { db } from '../lib/firebase';
-import { User as FirebaseUser } from 'firebase/auth';
+import { User as FirebaseUser, supabase } from '../lib/firebase';
 
 const apiKey = (import.meta as any).env?.VITE_GEMINI_API_KEY || (process as any).env?.GEMINI_API_KEY;
 const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
@@ -32,8 +30,9 @@ export function SkillAgent({ user }: SkillAgentProps) {
   useEffect(() => {
     const fetchUserSkills = async () => {
       try {
-        const skillsSnap = await getDocs(collection(db, 'users', user.uid, 'skills'));
-        const skills = skillsSnap.docs.map(doc => doc.data().skillName);
+        const { data, error } = await supabase.from('user_skills').select('skill_name').eq('user_id', user.id);
+        if (error) throw error;
+        const skills = (data || []).map((doc: any) => doc.skill_name);
         setUserSkills(skills);
       } catch (err) {
         console.error("Agent failed to fetch skills context:", err);
@@ -64,7 +63,7 @@ export function SkillAgent({ user }: SkillAgentProps) {
       // Build prompt context
       const systemInstruction = `
         You are the "SkillNexus Intelligence Agent", a sophisticated career strategist and tech industry oracle.
-        Your primary directive is to decode career paths for user ${user.displayName || 'Nexus Scholar'} with surgical precision.
+        Your primary directive is to decode career paths for user ${user.user_metadata?.full_name || user.email || 'Nexus Scholar'} with surgical precision.
         
         USER CURRENT SKILLS: [${userSkills.join(', ') || 'No skills added yet'}]
 

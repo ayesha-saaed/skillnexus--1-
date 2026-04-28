@@ -1,23 +1,13 @@
-import { db } from '../lib/firebase';
-import { 
-  collection, 
-  query, 
-  where, 
-  getDocs, 
-  addDoc, 
-  updateDoc, 
-  doc, 
-  serverTimestamp,
-  orderBy
-} from 'firebase/firestore';
+import { supabase } from '../lib/firebase';
 
 export interface Progress {
-  userId: string;
-  resourceId: string;
+  user_id: string;
+  resource_id: string;
   status: 'Not Started' | 'In Progress' | 'Completed';
   progress: number;
-  timeSpent: number;
-  lastUpdated: any;
+  time_spent: number;
+  last_updated: any;
+  [key: string]: any;
 }
 
 export const learningService = {
@@ -25,36 +15,41 @@ export const learningService = {
    * Tracks user progress on a learning resource.
    */
   async updateProgress(userId: string, resourceId: string, updates: Partial<Progress>) {
-    const progressRef = collection(db, 'progress');
-    const q = query(progressRef, where('userId', '==', userId), where('resourceId', '==', resourceId));
-    const snapshot = await getDocs(q);
+    const { data: existing } = await supabase
+      .from('progress')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('resource_id', resourceId)
+      .maybeSingle();
 
-    if (snapshot.empty) {
-      return await addDoc(progressRef, {
-        userId,
-        resourceId,
-        status: updates.status || 'In Progress',
-        progress: updates.progress || 0,
-        timeSpent: updates.timeSpent || 0,
-        lastUpdated: serverTimestamp()
-      });
-    } else {
-      const docRef = doc(db, 'progress', snapshot.docs[0].id);
-      return await updateDoc(docRef, {
-        ...updates,
-        lastUpdated: serverTimestamp()
-      });
+    const payload = {
+      user_id: userId,
+      resource_id: resourceId,
+      status: updates.status || 'In Progress',
+      progress: updates.progress || 0,
+      time_spent: updates.timeSpent || 0,
+      last_updated: new Date().toISOString()
+    };
+
+    if (!existing) {
+      return await supabase.from('progress').insert(payload);
     }
+    return await supabase.from('progress').update(payload).eq('id', existing.id);
   },
 
   /**
    * Fetches user progress for all resources.
    */
   async getUserProgress(userId: string) {
-    const progressRef = collection(db, 'progress');
-    const q = query(progressRef, where('userId', '==', userId));
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const { data, error } = await supabase.from('progress').select('*').eq('user_id', userId);
+    if (error) throw error;
+    return (data || []).map((row: any) => ({
+      ...row,
+      userId: row.user_id,
+      resourceId: row.resource_id,
+      timeSpent: row.time_spent,
+      lastUpdated: row.last_updated
+    }));
   },
 
   /**

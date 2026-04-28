@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { db, auth } from '../lib/firebase';
-import { collection, query, getDocs, addDoc, where, serverTimestamp, doc, getDoc, limit } from 'firebase/firestore';
+import { supabase, getCurrentUser } from '../lib/firebase';
 import { 
   Book, CheckCircle, ExternalLink, GraduationCap, PlayCircle, Search, 
   Sparkles, ShieldAlert, Plus, Filter, Trophy, Zap, Clock, Star, 
@@ -30,6 +29,7 @@ interface LibraryProps {
 
 export function Library({ onNavigate }: LibraryProps) {
   const [resources, setResources] = useState<Resource[]>([]);
+  const [recommendedResources, setRecommendedResources] = useState<Resource[]>([]);
   const [progress, setProgress] = useState<Record<string, Progress>>({});
   const [analysisResult, setAnalysisResult] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -58,20 +58,64 @@ export function Library({ onNavigate }: LibraryProps) {
   ];
 
   const fetchData = async () => {
-    if (!auth.currentUser) return;
+    const user = await getCurrentUser();
+    if (!user) return;
     setLoading(true);
     setError(null);
     try {
       // Fetch user skills for filtering
-      const skillsSnap = await getDocs(collection(db, 'users', auth.currentUser.uid, 'skills'));
-      const skillsList = skillsSnap.docs.map(doc => doc.data().skillName);
+      const { data: skillsData, error: skillsError } = await supabase.from('user_skills').select('skill_name').eq('user_id', user.id);
+      if (skillsError) throw skillsError;
+      const skillsList = (skillsData || []).map((row: any) => row.skill_name);
       setUserSkills(skillsList);
 
-      const resSnap = await getDocs(collection(db, 'resources'));
-      const resData = resSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Resource));
+      const { data: resDataRaw, error: resError } = await supabase.from('resources').select('*');
+      if (resError) throw resError;
+      const resData = (resDataRaw || []).map((doc: any) => ({
+        id: doc.id,
+        title: doc.title,
+        description: doc.description,
+        url: doc.url,
+        type: doc.type,
+        skillsCovered: doc.skills_covered || [],
+        difficulty: doc.difficulty,
+        platform: doc.platform,
+        duration: doc.duration,
+        rating: doc.rating,
+        domain: doc.domain
+      } as any as Resource));
       setResources(resData);
 
-      const progData = await learningService.getUserProgress(auth.currentUser.uid);
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (token) {
+        const recResp = await fetch('/api/recommendations', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (recResp.ok) {
+          const recData = await recResp.json();
+          const normalized = (recData || []).map((doc: any) => ({
+            id: doc.id,
+            title: doc.title,
+            description: doc.description,
+            url: doc.url,
+            type: doc.type,
+            skillsCovered: doc.skills_covered || [],
+            difficulty: doc.difficulty,
+            platform: doc.platform,
+            duration: doc.duration,
+            rating: doc.rating,
+            domain: doc.domain
+          } as Resource));
+          setRecommendedResources(normalized.slice(0, 3));
+        } else {
+          setRecommendedResources([]);
+        }
+      } else {
+        setRecommendedResources([]);
+      }
+
+      const progData = await learningService.getUserProgress(user.id);
       const progMap: Record<string, Progress> = {};
       progData.forEach((p: any) => {
         progMap[p.resourceId] = p;
@@ -92,13 +136,19 @@ export function Library({ onNavigate }: LibraryProps) {
   async function handleSeed() {
     setSeeding(true);
     try {
-      const res = await fetch('/api/admin/seed', { method: 'POST' });
+      const user = await getCurrentUser();
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      const res = await fetch('/api/admin/seed', {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.details || data.error || 'Could not load curriculum');
       await fetchData();
-      if (auth.currentUser) {
-        await gamificationService.awardPoints(auth.currentUser.uid, 100, 'Curriculum Synchronization');
-        await gamificationService.awardBadge(auth.currentUser.uid, 'nexus_pioneer');
+      if (user) {
+        await gamificationService.awardPoints(user.id, 100, 'Curriculum Synchronization');
+        await gamificationService.awardBadge(user.id, 'nexus_pioneer');
       }
       alert('Knowledge clusters synchronized successfully! +100 IQ awarded.');
     } catch (e: any) {
@@ -110,26 +160,27 @@ export function Library({ onNavigate }: LibraryProps) {
   }
 
   async function handleUpdateProgress(resourceId: string, status: Progress['status'], incProgress: number) {
-    if (!auth.currentUser) return;
+    const user = await getCurrentUser();
+    if (!user) return;
     try {
       const isNewlyCompleted = status === 'Completed' && progress[resourceId]?.status !== 'Completed';
       
-      await learningService.updateProgress(auth.currentUser.uid, resourceId, {
+      await learningService.updateProgress(user.id, resourceId, {
         status,
         progress: incProgress,
         timeSpent: 1 // Increment by 1 hour for demo
       });
 
       if (isNewlyCompleted) {
-        await gamificationService.awardPoints(auth.currentUser.uid, 50, 'Module Completion');
+        await gamificationService.awardPoints(user.id, 50, 'Module Completion');
         // Check for Module Master badge
         const completedCount = Object.values(progress).filter(p => p.status === 'Completed').length + 1;
         if (completedCount >= 5) {
-          await gamificationService.awardBadge(auth.currentUser.uid, 'module_master');
+          await gamificationService.awardBadge(user.id, 'module_master');
         }
       }
 
-      const updatedProg = await learningService.getUserProgress(auth.currentUser.uid);
+      const updatedProg = await learningService.getUserProgress(user.id);
       const progMap: Record<string, Progress> = {};
       updatedProg.forEach((p: any) => {
         progMap[p.resourceId] = p;
@@ -158,11 +209,6 @@ export function Library({ onNavigate }: LibraryProps) {
 
     return matchesSearch && matchesType && matchesDiff && matchesDomain && matchesMySkills && matchesGaps;
   });
-
-  const recommended = resources.filter(r => {
-    // Recommendation logic: if it matches user skills or identified gaps
-    return r.skillsCovered?.some(s => userSkills.includes(s)) || (r.rating && r.rating >= 4.9);
-  }).slice(0, 3);
 
   if (loading && !seeding) return (
     <div className="min-h-[60vh] flex flex-col items-center justify-center space-y-4">
@@ -213,14 +259,14 @@ export function Library({ onNavigate }: LibraryProps) {
       </div>
 
       {/* Recommendations Bar */}
-      {recommended.length > 0 && !search && (
+      {recommendedResources.length > 0 && !search && (
         <div className="space-y-6">
           <h2 className="text-xs font-bold text-zinc-400 uppercase tracking-[0.2em] flex items-center gap-2">
             <Zap className="w-4 h-4 text-amber-500" />
             Priority Recommendations
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {recommended.map(res => (
+            {recommendedResources.map(res => (
               <div key={`rec-${res.id}`} className="bg-indigo-600/10 border border-indigo-500/20 rounded-2xl p-6 relative group overflow-hidden">
                 <div className="flex items-center gap-2 text-amber-500 text-[9px] font-bold uppercase tracking-widest mb-3">
                    <Star className="w-3 h-3 fill-amber-500" /> Skill Match Found

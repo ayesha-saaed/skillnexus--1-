@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { db, auth } from '../lib/firebase';
-import { collection, query, getDocs, doc, getDoc, addDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { supabase, getCurrentUser } from '../lib/firebase';
 import { Key, Users, Briefcase, TrendingUp, Settings, Plus, Trash2, Database, ShieldAlert, Sparkles, LayoutDashboard } from 'lucide-react';
 import { motion } from 'motion/react';
 
@@ -18,9 +17,9 @@ export function Admin({ onNavigate }: AdminProps) {
 
   useEffect(() => {
     async function checkAdmin() {
-      if (!auth.currentUser) return;
-      const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
-      const data = userDoc.data();
+      const user = await getCurrentUser();
+      if (!user) return;
+      const { data } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
       if (data?.role === 'admin') {
         setIsAdmin(true);
         fetchStats();
@@ -33,20 +32,30 @@ export function Admin({ onNavigate }: AdminProps) {
   }, []);
 
   async function fetchStats() {
-    const usersSnap = await getDocs(collection(db, 'users'));
-    const rolesSnap = await getDocs(collection(db, 'jobRoles'));
-    const resSnap = await getDocs(collection(db, 'resources'));
+    const [{ count: usersCount }, { count: rolesCount }, { count: resourcesCount }] = await Promise.all([
+      supabase.from('profiles').select('*', { count: 'exact', head: true }),
+      supabase.from('job_roles').select('*', { count: 'exact', head: true }),
+      supabase.from('resources').select('*', { count: 'exact', head: true }),
+    ]);
     setStats({
-      users: usersSnap.size,
-      roles: rolesSnap.size,
-      resources: resSnap.size
+      users: usersCount || 0,
+      roles: rolesCount || 0,
+      resources: resourcesCount || 0
     });
   }
 
   async function handleAddResource() {
     if (!newRes.title || !newRes.url || !newRes.skill) return;
     try {
-      await addDoc(collection(db, 'resources'), newRes);
+      await supabase.from('resources').insert({
+        title: newRes.title,
+        url: newRes.url,
+        type: newRes.type,
+        difficulty: newRes.difficulty,
+        description: newRes.description,
+        platform: 'Custom',
+        skills_covered: [newRes.skill]
+      });
       setNewRes({ title: '', url: '', skill: '', type: 'Course', difficulty: 'Beginner', description: '' });
       fetchStats();
       alert('Resource committed to cloud successfully!');
@@ -58,7 +67,12 @@ export function Admin({ onNavigate }: AdminProps) {
 
   async function handleSeed() {
     try {
-      const resp = await fetch('/api/admin/seed', { method: 'POST' });
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      const resp = await fetch('/api/admin/seed', {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined
+      });
       const data = await resp.json();
       alert(data.message || 'Database synced successfully.');
       fetchStats();

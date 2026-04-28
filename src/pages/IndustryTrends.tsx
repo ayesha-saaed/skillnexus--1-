@@ -53,17 +53,19 @@ export function IndustryTrends({ onNavigate }: IndustryTrendsProps) {
     { label: 'Geo-Weight', value: 'Global', info: 'Distributed demand across tech hubs', icon: Globe, color: 'text-blue-500' },
   ];
 
+  const chartRows = trends.map(t => ({
+    ...t,
+    growthValue: Number(String(t.growth || "0").replace(/[^0-9.-]/g, "")) || 0
+  }));
   // Use activeMetric to determine chart data and appearance
-  const chartDataKey = activeMetric === 'growth' ? 'demandScore' : 'demandScore';
+  const chartDataKey = activeMetric === 'growth' ? 'growthValue' : 'demandScore';
   const chartColor = activeMetric === 'growth' ? '#10b981' : '#3b82f6';
   const chartGradientId = activeMetric === 'growth' ? 'colorGrowth' : 'colorDemand';
 
   // Filter and sort trends based on activeMetric
-  const sortedTrends = [...trends].sort((a, b) => {
+  const sortedTrends = [...chartRows].sort((a, b) => {
     if (activeMetric === 'growth') {
-      const ga = parseInt(a.growth?.replace(/[^0-9-]/g, '') || '0');
-      const gb = parseInt(b.growth?.replace(/[^0-9-]/g, '') || '0');
-      return gb - ga;
+      return (b.growthValue || 0) - (a.growthValue || 0);
     }
     return (b.demandScore || 0) - (a.demandScore || 0);
   });

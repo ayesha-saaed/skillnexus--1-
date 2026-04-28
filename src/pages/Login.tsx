@@ -1,12 +1,5 @@
 import React, { useState } from 'react';
-import {
-  signInWithEmailAndPassword,
-  signInWithPopup,
-  GoogleAuthProvider
-} from 'firebase/auth';
-
-import { auth, db } from '../lib/firebase';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { supabase } from '../lib/firebase';
 import { motion } from 'motion/react';
 import { Mail, Lock, AlertCircle, Chrome } from 'lucide-react';
 
@@ -26,24 +19,13 @@ export function Login({ onNavigate }: LoginProps) {
     setError('');
 
     try {
-      const provider = new GoogleAuthProvider();
-      const result = await signInWithPopup(auth, provider);
-      const user = result.user;
-
-      const userRef = doc(db, 'users', user.uid);
-      const userDoc = await getDoc(userRef);
-
-      if (!userDoc.exists()) {
-        await setDoc(userRef, {
-          name: user.displayName || 'User',
-          email: user.email,
-          role: 'student',
-          createdAt: new Date().toISOString(),
-          provider: 'google'
-        });
-      }
-
-      // Navigation is handled by App.tsx onAuthStateChanged
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: window.location.origin
+        }
+      });
+      if (error) throw error;
     } catch (err: any) {
       setError(err.message || 'Google sign-in failed');
     } finally {
@@ -58,8 +40,8 @@ export function Login({ onNavigate }: LoginProps) {
     setError('');
 
     try {
-      await signInWithEmailAndPassword(auth, email, password);
-      // Navigation is handled by App.tsx onAuthStateChanged
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
     } catch (err: any) {
       setError(err.message || 'Login failed');
     } finally {

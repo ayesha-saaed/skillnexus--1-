@@ -1,7 +1,5 @@
 import React, { useState } from 'react';
-import { createUserWithEmailAndPassword, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
-import { auth, db } from '../lib/firebase';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { supabase } from '../lib/firebase';
 import { motion } from 'motion/react';
 import { Mail, Lock, User, AlertCircle, Chrome } from 'lucide-react';
 
@@ -20,21 +18,11 @@ export function Register({ onNavigate }: RegisterProps) {
     setLoading(true);
     setError('');
     try {
-      const provider = new GoogleAuthProvider();
-      const result = await signInWithPopup(auth, provider);
-      const user = result.user;
-
-      const userDoc = await getDoc(doc(db, 'users', user.uid));
-      if (!userDoc.exists()) {
-        await setDoc(doc(db, 'users', user.uid), {
-          name: user.displayName || 'Architect',
-          email: user.email,
-          role: 'student',
-          createdAt: new Date().toISOString(),
-          provider: providerName
-        });
-      }
-      // Navigation is handled by App.tsx onAuthStateChanged
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: providerName,
+        options: { redirectTo: window.location.origin }
+      });
+      if (error) throw error;
     } catch (err: any) {
       setError(err.message || `Failed to sign up with ${providerName}`);
     } finally {
@@ -47,15 +35,29 @@ export function Register({ onNavigate }: RegisterProps) {
     setLoading(true);
     setError('');
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      // Create user document
-      await setDoc(doc(db, 'users', userCredential.user.uid), {
-        name,
+      const { data, error } = await supabase.auth.signUp({
         email,
-        role: 'student',
-        createdAt: new Date().toISOString()
+        password,
+        options: {
+          data: {
+            full_name: name
+          }
+        }
       });
-      // Navigation is handled by App.tsx onAuthStateChanged
+      if (error) throw error;
+      const userId = data.user?.id;
+      if (userId) {
+        await supabase.from('profiles').upsert({
+          id: userId,
+          name,
+          email,
+          role: 'student',
+          points: 0,
+          level: 1,
+          badges: [],
+          created_at: new Date().toISOString()
+        });
+      }
     } catch (err: any) {
       setError(err.message || 'Registration failed');
     } finally {

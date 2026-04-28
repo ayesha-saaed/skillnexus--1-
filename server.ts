@@ -3,39 +3,100 @@ import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
 import admin from "firebase-admin";
+import { createClient } from "@supabase/supabase-js";
 import natural from "natural";
 import dotenv from "dotenv";
-import fs from "fs";
 import axios from "axios";
+import { z } from "zod";
 import { MASTER_SKILLS, SYNONYMS, JOB_ROLES, INDUSTRY_DEMAND, LEARNING_RESOURCES } from "./src/lib/knowledge_base";
-import { SKILLS_DATA, INDUSTRY_DEMAND_HISTORICAL, CURATED_RESOURCES } from "./src/lib/data_seeder";
+import { INDUSTRY_DEMAND_HISTORICAL, CURATED_RESOURCES } from "./src/lib/data_seeder";
 
 dotenv.config();
+
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY;
+const supabaseAdmin = (supabaseUrl && supabaseServiceKey)
+  ? createClient(supabaseUrl, supabaseServiceKey)
+  : null;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Initialize Firebase Admin SDK
-const firebaseConfigPath = path.join(__dirname, "firebase-applet-config.json");
-const firebaseConfig = JSON.parse(fs.readFileSync(firebaseConfigPath, "utf-8"));
-
-if (!admin.apps?.length) {
-  admin.initializeApp({
-    projectId: firebaseConfig.projectId,
-    databaseURL: `https://${firebaseConfig.projectId}.firebaseio.com`
-  });
-}
-
-const db = admin.firestore();
-if (firebaseConfig.firestoreDatabaseId && firebaseConfig.firestoreDatabaseId !== '(default)') {
-  // Note: Admin SDK usually uses the default database unless specified differently in the client config
-  // In many setups, the databaseId from client config is what and Admin needs
+if (!supabaseAdmin) {
+  throw new Error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY / SUPABASE_SECRET_KEY");
 }
 
 const app = express();
 const PORT = 3000;
 
 app.use(express.json());
+
+type AuthedRequest = express.Request & {
+  authUser?: { id: string; email?: string | null };
+  isAdmin?: boolean;
+};
+type ApiErrorCode = "VALIDATION_ERROR" | "AUTH_ERROR" | "FORBIDDEN" | "NOT_FOUND" | "SERVER_ERROR";
+
+const apiError = (res: express.Response, status: number, code: ApiErrorCode, message: string, details?: unknown) =>
+  res.status(status).json({ error: { code, message, details } });
+
+const auditLog = (event: string, meta: Record<string, unknown>) => {
+  const payload = { ts: new Date().toISOString(), event, ...meta };
+  console.log(JSON.stringify(payload));
+  if (supabaseAdmin) {
+    void supabaseAdmin.from("api_audit_logs").insert({
+      event,
+      payload: meta,
+      created_at: new Date().toISOString()
+    });
+  }
+};
+
+const recommendationsQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(50).optional()
+});
+
+const linkedInCallbackSchema = z.object({
+  code: z.string().optional(),
+  error: z.string().optional(),
+  error_description: z.string().optional()
+});
+
+const getBearerToken = (req: express.Request) => {
+  const header = req.headers.authorization || "";
+  if (!header.toLowerCase().startsWith("bearer ")) return null;
+  return header.slice(7).trim();
+};
+
+const requireAuth: express.RequestHandler = async (req, res, next) => {
+  if (!supabaseAdmin) return apiError(res, 500, "SERVER_ERROR", "Supabase admin client not configured");
+  const token = getBearerToken(req);
+  if (!token) return apiError(res, 401, "AUTH_ERROR", "Missing bearer token");
+
+  const { data, error } = await supabaseAdmin.auth.getUser(token);
+  if (error || !data.user) return apiError(res, 401, "AUTH_ERROR", "Invalid or expired token");
+
+  (req as AuthedRequest).authUser = { id: data.user.id, email: data.user.email };
+  next();
+};
+
+const requireAdmin: express.RequestHandler = async (req, res, next) => {
+  const authReq = req as AuthedRequest;
+  if (!authReq.authUser?.id) return apiError(res, 401, "AUTH_ERROR", "Unauthorized");
+  if (!supabaseAdmin) return apiError(res, 500, "SERVER_ERROR", "Supabase admin client not configured");
+
+  const { data, error } = await supabaseAdmin
+    .from("profiles")
+    .select("role")
+    .eq("id", authReq.authUser.id)
+    .maybeSingle();
+
+  if (error) return apiError(res, 500, "SERVER_ERROR", "Failed to check admin role", error.message);
+  if (!data || data.role !== "admin") return apiError(res, 403, "FORBIDDEN", "Admin access required");
+
+  authReq.isAdmin = true;
+  next();
+};
 
 // --- NLP & Semantic Logic ---
 
@@ -205,7 +266,11 @@ app.get("/api/auth/linkedin/url", (req, res) => {
 });
 
 app.get("/api/auth/linkedin/callback", async (req, res) => {
-  const { code, error, error_description } = req.query;
+  const parsed = linkedInCallbackSchema.safeParse(req.query);
+  if (!parsed.success) {
+    return apiError(res, 400, "VALIDATION_ERROR", "Invalid LinkedIn callback query", parsed.error.flatten());
+  }
+  const { code, error, error_description } = parsed.data;
 
   if (error) {
     return res.send(`
@@ -265,21 +330,8 @@ app.get("/api/auth/linkedin/callback", async (req, res) => {
       });
     }
 
-    // Ensure user doc exists in Firestore
-    const userDocRef = db.collection("users").doc(uid);
-    const userDoc = await userDocRef.get();
-    if (!userDoc.exists) {
-      await userDocRef.set({
-        name: linkedinUser.name,
-        email: email,
-        role: "student",
-        points: 0,
-        level: 1,
-        badges: [],
-        createdAt: new Date().toISOString(),
-        provider: "linkedin"
-      });
-    }
+    // Note: LinkedIn path currently issues Firebase custom tokens only.
+    // Supabase social auth should be preferred for production login flows.
 
     // 4. Generate custom token
     const customToken = await admin.auth().createCustomToken(uid);
@@ -312,142 +364,248 @@ app.get("/api/auth/linkedin/callback", async (req, res) => {
 
 // --- API Endpoints ---
 
-app.post("/api/analyze", async (req, res) => {
+const analyzeSchema = z.object({
+  userId: z.string().uuid().optional(),
+  jobRoleId: z.string().uuid(),
+  userSkills: z.array(z.union([z.string(), z.object({ skillName: z.string(), proficiencyLevel: z.number().optional() })])).optional()
+});
+
+app.post("/api/analyze", requireAuth, async (req, res) => {
   try {
-    const { userId, jobRoleId, userSkills: providedSkills } = req.body;
+    const parsed = analyzeSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return apiError(res, 400, "VALIDATION_ERROR", "Invalid analyze payload", parsed.error.flatten());
+    }
+    const { userId, jobRoleId, userSkills: providedSkills } = parsed.data;
+    const authReq = req as AuthedRequest;
+    if (authReq.authUser?.id && userId && authReq.authUser.id !== userId && !authReq.isAdmin) {
+      return apiError(res, 403, "FORBIDDEN", "Forbidden for this userId");
+    }
+    const effectiveUserId = authReq.authUser?.id || userId;
     
     let userSkillsFull = [];
     
-    try {
-      const skillsSnap = await db.collection("users").doc(userId).collection("skills").get();
-      userSkillsFull = skillsSnap.docs.map(doc => doc.data());
-    } catch (err) {
-      userSkillsFull = (providedSkills || []).map((s: any) => 
-        typeof s === 'string' ? { skillName: s, proficiencyLevel: 0.5 } : s
-      );
+    const [{ data: skillsRows }, { data: roleData, error: roleErr }] = await Promise.all([
+      supabaseAdmin!.from("user_skills").select("*").eq("user_id", effectiveUserId),
+      supabaseAdmin!.from("job_roles").select("*").eq("id", jobRoleId).maybeSingle()
+    ]);
+    if (roleErr || !roleData) {
+      return apiError(res, 404, "NOT_FOUND", "Job role not found");
     }
-    
-    const jobRoleDoc = await db.collection("jobRoles").doc(jobRoleId).get();
-    if (!jobRoleDoc.exists) {
-      return res.status(404).json({ error: "Job role not found" });
-    }
-    const roleData = jobRoleDoc.data();
-    const requiredSkills = roleData?.requiredSkills || [];
-    const domain = roleData?.domain;
+    userSkillsFull = (skillsRows || []).map((row: any) => ({
+      skillName: row.skill_name,
+      proficiencyLevel: row.proficiency === "Advanced" ? 1 : row.proficiency === "Intermediate" ? 0.7 : 0.3
+    }));
+    const requiredSkills = roleData.required_skills || [];
+    const domain = roleData.domain;
     
     const analysis = analyzeGaps(userSkillsFull, requiredSkills, domain);
+    auditLog("analyze.success", { userId: effectiveUserId, jobRoleId, similarity: analysis.similarity, gapScore: analysis.gapScore });
     res.json(analysis);
   } catch (error: any) {
-    console.error("Analysis error:", error);
-    res.status(500).json({ error: "Analysis failed", details: error.message });
+    auditLog("analyze.error", { message: error.message });
+    apiError(res, 500, "SERVER_ERROR", "Analysis failed", error.message);
   }
 });
 
 app.get("/api/industry-trends", async (req, res) => {
   try {
-    const trendsSnapshot = await db.collection("trends").get();
-    const trends = trendsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const { data, error } = await supabaseAdmin!
+      .from("trends")
+      .select("*")
+      .order("demand_score", { ascending: false });
+    if (error) throw error;
+    const { data: historyRows, error: historyErr } = await supabaseAdmin!
+      .from("trend_history")
+      .select("*")
+      .order("year", { ascending: true });
+    if (historyErr) throw historyErr;
+    const growthBySkill = new Map<string, string>();
+    const grouped: Record<string, any[]> = {};
+    (historyRows || []).forEach((row: any) => {
+      grouped[row.skill_name] = grouped[row.skill_name] || [];
+      grouped[row.skill_name].push(row);
+    });
+    Object.entries(grouped).forEach(([skill, rows]) => {
+      const sorted = rows.sort((a, b) => a.year - b.year);
+      const latest = sorted[sorted.length - 1];
+      const prev = sorted[sorted.length - 2];
+      const growth = prev ? (((latest.demand_score - prev.demand_score) / Math.max(prev.demand_score, 1)) * 100) : (latest?.growth_rate || 0);
+      growthBySkill.set(skill, `${growth >= 0 ? "+" : ""}${Math.round(growth)}%`);
+    });
+    const trends = (data || []).map((row: any) => ({
+      id: row.id,
+      skillName: row.skill_name,
+      demandScore: row.demand_score,
+      growth: growthBySkill.get(row.skill_name) || row.growth || "+0%"
+    }));
+    auditLog("trends.fetch", { count: trends.length });
     res.json(trends);
   } catch (error: any) {
-    res.status(500).json({ error: "Failed to fetch trends", details: error.message });
+    apiError(res, 500, "SERVER_ERROR", "Failed to fetch trends", error.message);
   }
 });
 
-app.post("/api/admin/seed", async (req, res) => {
+app.post("/api/admin/seed", requireAuth, requireAdmin, async (req, res) => {
   try {
     console.log("Seeding high-fidelity datasets...");
-    
-    // 1. Master Skills (200+)
-    const skillsRef = db.collection("skills");
-    const skillsSnap = await skillsRef.limit(1).get();
-    if (skillsSnap.empty) {
-      console.log("Seeding 200+ Master Skills...");
-      for (const skill of SKILLS_DATA) {
-        await skillsRef.add({
-          ...skill,
-          createdAt: new Date().toISOString()
-        });
-      }
+    // 1) Trend history + latest trends
+    const historyRows = INDUSTRY_DEMAND_HISTORICAL.map((row: any) => ({
+      skill_name: row.skill,
+      year: row.year,
+      demand_score: row.demandScore,
+      growth_rate: row.growthRate
+    }));
+    if (historyRows.length) {
+      const { error } = await supabaseAdmin!.from("trend_history").upsert(historyRows, { onConflict: "skill_name,year" });
+      if (error) throw error;
+    }
+    const trendsRows = INDUSTRY_DEMAND_HISTORICAL
+      .filter((row: any) => row.year === 2026)
+      .map((row: any) => ({
+        skill_name: row.skill,
+        demand_score: row.demandScore,
+        growth: `+${row.growthRate}%`
+      }));
+    if (trendsRows.length) {
+      const { error } = await supabaseAdmin!.from("trends").upsert(trendsRows, { onConflict: "skill_name" });
+      if (error) throw error;
     }
 
-    // 2. Industry Demand (Historical)
-    const demandRef = db.collection("industryDemand");
-    const demandSnap = await demandRef.limit(1).get();
-    if (demandSnap.empty) {
-      console.log("Seeding Historical Industry Demand...");
-      for (const demand of INDUSTRY_DEMAND_HISTORICAL) {
-        await demandRef.add(demand);
-      }
+    // 2) Resources
+    const resourceRows = CURATED_RESOURCES
+      .filter((r: any) => r.url)
+      .map((r: any) => ({
+        title: r.title,
+        description: r.description || "",
+        url: r.url,
+        type: r.type || "Course",
+        skills_covered: r.skillsCovered || [],
+        difficulty: r.difficulty || "Beginner",
+        platform: r.platform || "Unknown",
+        duration: r.duration || null,
+        rating: r.rating || null,
+        domain: r.domain || "Full Stack"
+      }));
+    if (resourceRows.length) {
+      const { error } = await supabaseAdmin!.from("resources").upsert(resourceRows, { onConflict: "url" });
+      if (error) throw error;
     }
 
-    // 3. Learning Resources (Enhanced) - Update: Upsert curated ones to ensure user provided ones are present
-    const resourcesRef = db.collection("resources");
-    console.log("Upserting Curated Resources...");
-    
-    // Get existing to find documents to update
-    const existingRes = await resourcesRef.get();
-    const existingMap = new Map<string, string>(); // url -> docId
-    existingRes.docs.forEach(d => existingMap.set(d.data().url, d.id));
-
-    for (const resItem of CURATED_RESOURCES) {
-      const docId = existingMap.get(resItem.url);
-      if (docId) {
-        // Update existing to ensure latest domain/skills are reflected
-        await resourcesRef.doc(docId).update({
-          ...resItem,
-          updatedAt: new Date().toISOString()
-        });
-      } else {
-        // Add new
-        await resourcesRef.add({
-          ...resItem,
-          createdAt: new Date().toISOString()
-        });
-      }
+    // 3) Job roles
+    const roleRows = JOB_ROLES.map((role: any) => ({
+      role_name: role.jobRole,
+      required_skills: role.requiredSkills || [],
+      domain: role.domain || "Full Stack",
+      difficulty: "Intermediate"
+    }));
+    if (roleRows.length) {
+      const { error } = await supabaseAdmin!.from("job_roles").upsert(roleRows, { onConflict: "role_name" });
+      if (error) throw error;
     }
 
-    // Optional: Also check original knowledge base
-    for (const resItem of LEARNING_RESOURCES as any[]) {
-      if (!existingMap.has(resItem.url)) {
-        await resourcesRef.add({
-          ...resItem,
-          createdAt: new Date().toISOString()
-        });
-      }
-    }
-
-    // 4. Job Roles
-    const jobRolesRef = db.collection("jobRoles");
-    const rolesSnap = await jobRolesRef.limit(1).get();
-    if (rolesSnap.empty) {
-      for (const role of JOB_ROLES) {
-        await jobRolesRef.add({
-          title: role.jobRole,
-          requiredSkills: role.requiredSkills,
-          domain: role.domain,
-          description: `Strategic industry roadmap for ${role.jobRole}.`
-        });
-      }
-    }
-
-    res.json({ message: "SkillNexus Intelligence Core Seeding Complete" });
+    auditLog("seed.success", { actor: (req as AuthedRequest).authUser?.id, trends: trendsRows.length, resources: resourceRows.length, roles: roleRows.length });
+    return res.json({ message: "Supabase seeding complete", counts: { trends: trendsRows.length, resources: resourceRows.length, roles: roleRows.length } });
   } catch (error: any) {
-    console.error("Deep Seeding Failed:", error);
-    res.status(500).json({ error: "Seeding failed", details: error.message });
+    auditLog("seed.error", { message: error.message });
+    apiError(res, 500, "SERVER_ERROR", "Seeding failed", error.message);
   }
 });
 
-app.post("/api/admin/roles", async (req, res) => {
+const adminRoleSchema = z.object({
+  title: z.string().min(2),
+  requiredSkills: z.array(z.string()).default([])
+});
+
+app.post("/api/admin/roles", requireAuth, requireAdmin, async (req, res) => {
   try {
-    const { title, requiredSkills } = req.body;
-    const docRef = await db.collection("jobRoles").add({ 
-      title, 
-      requiredSkills, 
-      description: "Custom specialization." 
-    });
-    res.json({ id: docRef.id });
+    const parsed = adminRoleSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return apiError(res, 400, "VALIDATION_ERROR", "Invalid role payload", parsed.error.flatten());
+    }
+    const { title, requiredSkills } = parsed.data;
+    const { data, error } = await supabaseAdmin!.from("job_roles").insert({
+      role_name: title,
+      required_skills: requiredSkills || [],
+      domain: "Custom",
+      difficulty: "Intermediate"
+    }).select("id").single();
+    if (error) throw error;
+    auditLog("admin.role.created", { actor: (req as AuthedRequest).authUser?.id, roleId: data.id, title });
+    res.json({ id: data.id });
   } catch (error: any) {
-    res.status(500).json({ error: "Failed to add role", details: error.message });
+    apiError(res, 500, "SERVER_ERROR", "Failed to add role", error.message);
+  }
+});
+
+app.get("/api/recommendations", requireAuth, async (req, res) => {
+  try {
+    const queryParsed = recommendationsQuerySchema.safeParse(req.query);
+    if (!queryParsed.success) {
+      return apiError(res, 400, "VALIDATION_ERROR", "Invalid recommendations query", queryParsed.error.flatten());
+    }
+    const maxRecommendations = queryParsed.data.limit ?? 10;
+
+    if (!supabaseAdmin) return apiError(res, 500, "SERVER_ERROR", "Supabase admin client not configured");
+    const authReq = req as AuthedRequest;
+    const userId = authReq.authUser?.id;
+    if (!userId) return apiError(res, 401, "AUTH_ERROR", "Unauthorized");
+
+    const [{ data: skillsRows, error: skillsErr }, { data: resourcesRows, error: resourcesErr }] = await Promise.all([
+      supabaseAdmin.from("user_skills").select("*").eq("user_id", userId),
+      supabaseAdmin.from("resources").select("*")
+    ]);
+    if (skillsErr) throw skillsErr;
+    if (resourcesErr) throw resourcesErr;
+
+    const userSkills = (skillsRows || []).map((row: any) => normalizeSkill(row.skill_name));
+    if (!userSkills.length) return res.json([]);
+
+    const userDoc = userSkills.join(" ");
+    const recommendations = (resourcesRows || []).map((resource: any) => {
+      const covered = (resource.skills_covered || []).map((s: string) => normalizeSkill(s));
+      const overlap = covered.filter((skill: string) => userSkills.includes(skill));
+      const tfidf = new (natural as any).TfIdf();
+      tfidf.addDocument(userDoc);
+      tfidf.addDocument(covered.join(" "));
+      const terms = Array.from(new Set([...userSkills, ...covered]));
+      const vectors: number[][] = [[], []];
+      terms.forEach((term, index) => {
+        tfidf.listTerms(0).forEach((t: any) => { if (t.term === term.toLowerCase()) vectors[0][index] = t.tfidf; });
+        tfidf.listTerms(1).forEach((t: any) => { if (t.term === term.toLowerCase()) vectors[1][index] = t.tfidf; });
+        if (!vectors[0][index]) vectors[0][index] = 0;
+        if (!vectors[1][index]) vectors[1][index] = 0;
+      });
+      const semantic = calculateCosineSimilarity(vectors[0], vectors[1]);
+      const score = overlap.length * 0.6 + semantic * 0.4;
+      return {
+        resource_id: resource.id,
+        score,
+        reason: overlap.length ? `Matches ${overlap.slice(0, 3).join(", ")}` : "Semantic skill similarity"
+      };
+    }).sort((a, b) => b.score - a.score).slice(0, maxRecommendations);
+
+    if (recommendations.length) {
+      const rows = recommendations.map((item) => ({
+        user_id: userId,
+        resource_id: item.resource_id,
+        score: Number(item.score.toFixed(4)),
+        reason: item.reason,
+        updated_at: new Date().toISOString()
+      }));
+      const { error: upsertErr } = await supabaseAdmin.from("recommendations").upsert(rows, { onConflict: "user_id,resource_id" });
+      if (upsertErr) throw upsertErr;
+    }
+
+    const resourceIds = recommendations.map((r) => r.resource_id);
+    const { data: selectedResources, error: selErr } = await supabaseAdmin.from("resources").select("*").in("id", resourceIds);
+    if (selErr) throw selErr;
+    const byId = new Map((selectedResources || []).map((r: any) => [r.id, r]));
+    const payload = recommendations.map((rec) => ({ ...byId.get(rec.resource_id), recommendationScore: rec.score, recommendationReason: rec.reason })).filter(Boolean);
+    auditLog("recommendations.generated", { userId, count: payload.length });
+    return res.json(payload);
+  } catch (error: any) {
+    return apiError(res, 500, "SERVER_ERROR", "Failed to generate recommendations", error.message);
   }
 });
 

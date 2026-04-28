@@ -1,14 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { db } from '../lib/firebase';
-import { User } from 'firebase/auth';
-import {
-  collection,
-  query,
-  getDocs,
-  doc,
-  getDoc,
-  where,
-} from 'firebase/firestore';
+import { User, supabase } from '../lib/firebase';
 import { motion } from 'motion/react';
 import {
   Radar,
@@ -45,7 +36,7 @@ interface UserSkill {
 
 interface ProgressEntry {
   id?: string;
-  userId: string;
+  user_id: string;
   [key: string]: any;
 }
 
@@ -140,26 +131,26 @@ export const Dashboard = React.memo(function Dashboard({ user, onNavigate }: Das
       setLoading(true);
       try {
         // ✅ Parallel queries instead of sequential
-        const [skillsSnap, progSnap, userDoc] = await Promise.all([
-          getDocs(query(collection(db, 'users', user.uid, 'skills'))),
-          getDocs(
-            query(
-              collection(db, 'progress'),
-              where('userId', '==', user.uid) // ✅ Server-side filtering
-            )
-          ),
-          getDoc(doc(db, 'users', user.uid)),
+        const [skillsRes, progRes, profileRes] = await Promise.all([
+          supabase.from('user_skills').select('*').eq('user_id', user.id),
+          supabase.from('progress').select('*').eq('user_id', user.id),
+          supabase.from('profiles').select('*').eq('id', user.id).maybeSingle(),
         ]);
 
         if (cancelled) return;
 
-        const skillsData = skillsSnap.docs.map(
-          (d) => ({ id: d.id, ...d.data() } as UserSkill)
-        );
-        const enrollmentsData = progSnap.docs.map(
-          (d) => ({ id: d.id, ...d.data() } as ProgressEntry)
-        );
-        const profileData = userDoc.data() as UserProfile | undefined;
+        if (skillsRes.error) throw skillsRes.error;
+        if (progRes.error) throw progRes.error;
+        if (profileRes.error) throw profileRes.error;
+
+        const skillsData = (skillsRes.data || []).map((d: any) => ({
+          id: d.id,
+          skillName: d.skill_name,
+          proficiency: d.proficiency,
+          updatedAt: d.updated_at
+        } as UserSkill));
+        const enrollmentsData = (progRes.data || []) as ProgressEntry[];
+        const profileData = profileRes.data as UserProfile | null;
 
         setSkills(skillsData);
         setEnrollments(enrollmentsData);
@@ -201,7 +192,7 @@ export const Dashboard = React.memo(function Dashboard({ user, onNavigate }: Das
     return () => {
       cancelled = true;
     };
-  }, [user.uid]);
+  }, [user.id]);
 
   const chartData = skills.map((s) => ({
     subject: s.skillName,

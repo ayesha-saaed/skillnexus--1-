@@ -1,18 +1,4 @@
-import { db } from '../lib/firebase';
-import { 
-  doc, 
-  updateDoc, 
-  getDoc, 
-  setDoc, 
-  increment, 
-  arrayUnion, 
-  collection, 
-  query, 
-  orderBy, 
-  limit, 
-  getDocs,
-  serverTimestamp 
-} from 'firebase/firestore';
+import { supabase } from '../lib/firebase';
 
 export interface Badge {
   id: string;
@@ -31,37 +17,32 @@ export const BADGES: Badge[] = [
 
 export const gamificationService = {
   awardPoints: async (userId: string, amount: number, reason: string) => {
-    const userRef = doc(db, 'users', userId);
-    const leaderboardRef = doc(db, 'leaderboard', userId);
-    
     try {
-      // Update user document
-      await updateDoc(userRef, {
-        points: increment(amount),
-        updatedAt: serverTimestamp()
-      });
-
-      // Update leaderboard
-      const userSnap = await getDoc(userRef);
-      const userData = userSnap.data();
+      const { data: userData } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
       
       if (userData) {
-        await setDoc(leaderboardRef, {
+        const newPoints = (userData.points || 0) + amount;
+        await supabase.from('profiles').update({
+          points: newPoints,
+          updated_at: new Date().toISOString()
+        }).eq('id', userId);
+
+        await supabase.from('leaderboard').upsert({
           userId,
           displayName: userData.name || 'Anonymous Architect',
           photoURL: userData.photoURL || '',
-          points: (userData.points || 0),
+          points: newPoints,
           badgesCount: (userData.badges?.length || 0),
-          lastUpdated: serverTimestamp()
-        }, { merge: true });
+          lastUpdated: new Date().toISOString()
+        });
         
         // Check for level up (every 500 points)
-        const currentPoints = userData.points || 0;
+        const currentPoints = newPoints;
         const oldLevel = Math.floor((currentPoints - amount) / 500);
         const newLevel = Math.floor(currentPoints / 500);
         
         if (newLevel > oldLevel) {
-           await updateDoc(userRef, { level: newLevel });
+           await supabase.from('profiles').update({ level: newLevel }).eq('id', userId);
         }
 
         // Check for Architect badge
@@ -75,22 +56,21 @@ export const gamificationService = {
   },
 
   awardBadge: async (userId: string, badgeId: string) => {
-    const userRef = doc(db, 'users', userId);
     try {
-      const userSnap = await getDoc(userRef);
-      const userData = userSnap.data();
+      const { data: userData } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
       
       if (userData && !userData.badges?.includes(badgeId)) {
-        await updateDoc(userRef, {
-          badges: arrayUnion(badgeId),
-          updatedAt: serverTimestamp()
-        });
+        const nextBadges = [...(userData.badges || []), badgeId];
+        await supabase.from('profiles').update({
+          badges: nextBadges,
+          updated_at: new Date().toISOString()
+        }).eq('id', userId);
         
         // Update leaderboard badge count
-        const leaderboardRef = doc(db, 'leaderboard', userId);
-        await updateDoc(leaderboardRef, {
+        await supabase.from('leaderboard').upsert({
+          userId,
           badgesCount: (userData.badges?.length || 0) + 1,
-          lastUpdated: serverTimestamp()
+          lastUpdated: new Date().toISOString()
         });
         
         return true;
@@ -103,22 +83,19 @@ export const gamificationService = {
   },
 
   getLeaderboard: async (count: number = 20) => {
-    const lbRef = collection(db, 'leaderboard');
-    const q = query(lbRef, orderBy('points', 'desc'), limit(count));
-    const snap = await getDocs(q);
-    return snap.docs.map(doc => doc.data());
+    const { data, error } = await supabase.from('leaderboard').select('*').order('points', { ascending: false }).limit(count);
+    if (error) throw error;
+    return data || [];
   },
 
   async checkAchievements(userId: string, category: 'gaps' | 'resources' | 'skills') {
-     const userRef = doc(db, 'users', userId);
-     const userSnap = await getDoc(userRef);
-     const userData = userSnap.data();
+     const { data: userData } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
      if (!userData) return;
 
      if (category === 'gaps') {
-        const gapsSnap = await getDocs(collection(db, 'users', userId, 'skills')); // Technically these are added skills but let's assume we track gaps differently or use this
+        const { count } = await supabase.from('user_skills').select('*', { count: 'exact', head: true }).eq('user_id', userId);
         // For simplicity, let's just count total user skills added as "engagement"
-        if (gapsSnap.size >= 5 && !userData.badges?.includes('gap_finder')) {
+        if ((count || 0) >= 5 && !userData.badges?.includes('gap_finder')) {
            await gamificationService.awardBadge(userId, 'gap_finder');
         }
      }
