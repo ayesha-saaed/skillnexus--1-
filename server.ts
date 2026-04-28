@@ -121,21 +121,24 @@ function calculateCosineSimilarity(vec1: number[], vec2: number[]) {
   return dotProduct / (mag1 * mag2);
 }
 
-function analyzeGaps(userSkillsRaw: any[], requiredSkills: any[], domain?: string) {
+function analyzeGaps(userSkillsRaw: any[], requiredSkills: any[], domain?: string, demandMap?: Record<string, number>) {
   const TfIdf = (natural as any).TfIdf;
   const tfidf = new TfIdf();
 
   // Normalize user skills
   const userSkillsCanonical = userSkillsRaw.map(s => {
     const name = typeof s === 'string' ? s : (s.skillName || s.name);
-    return { name: normalizeSkill(name), proficiency: s.proficiencyLevel || 0.5 };
+    const proficiency = typeof s?.proficiency === "number"
+      ? s.proficiency
+      : (typeof s?.proficiencyLevel === "number" ? s.proficiencyLevel : 0.5);
+    return { name: normalizeSkill(name), proficiency };
   });
 
   // Normalize required skills
-  const requiredSkillsCanonical = requiredSkills.map(s => ({
+  const requiredSkillsCanonical = requiredSkills.map((s: any) => ({
     name: normalizeSkill(typeof s === 'string' ? s : s.name),
-    importance: s.importance || 0.5,
-    requiredProficiency: s.requiredProficiency || 0.5
+    importance: typeof s?.importance === "number" ? s.importance : 0.7,
+    requiredProficiency: typeof s?.requiredProficiency === "number" ? s.requiredProficiency : 0.8
   }));
 
   const userDoc = userSkillsCanonical.map(s => s.name).join(" ");
@@ -164,29 +167,57 @@ function analyzeGaps(userSkillsRaw: any[], requiredSkills: any[], domain?: strin
 
   const similarity = calculateCosineSimilarity(vectors[0], vectors[1]);
   
-  const matched = requiredSkillsCanonical.filter(req => 
+  const matched = requiredSkillsCanonical.filter(req =>
     userSkillsCanonical.some(u => u.name === req.name)
   );
-  
-  const missing = requiredSkillsCanonical.filter(req => 
+
+  const missing = requiredSkillsCanonical.filter(req =>
     !userSkillsCanonical.some(u => u.name === req.name)
   );
 
-  const weakSkills = matched.filter(req => {
+  const weakSkillsCanonical = matched.filter(req => {
     const userSkill = userSkillsCanonical.find(u => u.name === req.name);
     return userSkill && userSkill.proficiency < req.requiredProficiency;
   });
 
-  const gapScore = requiredSkillsCanonical.length > 0 ? (missing.length + weakSkills.length) / requiredSkillsCanonical.length : 0;
+  const getDemandScore = (skillName: string) => {
+    if (demandMap && demandMap[skillName] !== undefined) return demandMap[skillName];
+    return INDUSTRY_DEMAND.find(d => normalizeSkill(d.skill) === skillName)?.demandScore || 50;
+  };
+
+  const gapScore = requiredSkillsCanonical.length > 0 ? (missing.length + weakSkillsCanonical.length) / requiredSkillsCanonical.length : 0;
 
   const rankedMissing = missing.map(m => {
-    const demand = INDUSTRY_DEMAND.find(d => d.skill === m.name);
-    const trend = MASTER_SKILLS.find(ms => ms.name === m.name)?.trendScore || 0.5;
+    const demandScore = getDemandScore(m.name);
+    const trend = MASTER_SKILLS.find(ms => normalizeSkill(ms.name) === m.name)?.trendScore || 0.5;
+    const delta = Math.max(0, m.requiredProficiency - 0);
     return {
       name: m.name,
-      rankScore: (demand?.demandScore || 50) / 100 + trend + (m.importance * 1.5)
+      demandScore,
+      gapScore: delta,
+      finalScore: delta + (demandScore / 100),
+      rankScore: delta + (demandScore / 100) + trend + (m.importance * 0.3)
     };
   }).sort((a, b) => b.rankScore - a.rankScore);
+
+  const weakSkills = weakSkillsCanonical
+    .map(req => {
+      const userSkill = userSkillsCanonical.find(u => u.name === req.name)!;
+      const delta = Math.max(0, req.requiredProficiency - userSkill.proficiency);
+      const demandScore = getDemandScore(req.name);
+      const finalScore = delta + (demandScore / 100);
+      const priority: "High" | "Medium" | "Low" = finalScore >= 1.1 ? "High" : finalScore >= 0.7 ? "Medium" : "Low";
+      return {
+        skill: req.name,
+        userLevel: Number(userSkill.proficiency.toFixed(2)),
+        requiredLevel: Number(req.requiredProficiency.toFixed(2)),
+        gapScore: Number(delta.toFixed(2)),
+        demandScore,
+        finalScore: Number(finalScore.toFixed(2)),
+        priority
+      };
+    })
+    .sort((a, b) => b.finalScore - a.finalScore);
 
   // --- Enhanced Rich Recommendations Logic ---
   const richRecommendations: any[] = [];
@@ -211,7 +242,7 @@ function analyzeGaps(userSkillsRaw: any[], requiredSkills: any[], domain?: strin
   }
 
   // 2. Address weak skills
-  for (const skill of weakSkills.slice(0, 2)) {
+  for (const skill of weakSkillsCanonical.slice(0, 2)) {
     const resource = CURATED_RESOURCES.find(r => 
       r.skillsCovered.some(s => normalizeSkill(s) === skill.name) && 
       r.difficulty !== 'Beginner'
@@ -229,18 +260,77 @@ function analyzeGaps(userSkillsRaw: any[], requiredSkills: any[], domain?: strin
     }
   }
 
+  const missingSkills = rankedMissing.map(m => m.name);
+  const recommendedSkillsToLearn = [
+    ...rankedMissing.map(m => m.name),
+    ...weakSkills.map(w => `${w.skill} (advanced)`)
+  ];
+
+  const skillMatchScore = Math.round((1 - gapScore) * 100);
+
   return {
+    jobRole: domain || "Selected Role",
     similarity,
     gapScore,
+    skillMatchScore: Math.max(0, Math.min(100, skillMatchScore)),
+    missingSkills,
+    weakSkills,
+    recommendedSkillsToLearn,
     matched: matched.map(m => m.name),
-    missing: rankedMissing.map(m => m.name),
-    weakSkills: weakSkills.map(w => w.name),
+    missing: missingSkills,
     recommendations: [
       ...rankedMissing.slice(0, 2).map(m => `Priority Gap: Master ${m.name} (Critical Market Demand).`),
-      ...weakSkills.slice(0, 1).map(w => `Skill Decay Guard: Improve your ${w} level to meet role standards.`)
+      ...weakSkills.slice(0, 1).map(w => `Skill Decay Guard: Improve your ${w.skill} level to meet role standards.`)
     ],
     richRecommendations
   };
+}
+
+function proficiencyToLevel(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value)) return Math.min(1, Math.max(0, value));
+  if (typeof value === "string") {
+    if (value === "Advanced") return 1;
+    if (value === "Intermediate") return 0.7;
+    if (value === "Beginner") return 0.3;
+  }
+  return 0.5;
+}
+
+function getDefaultRoleRows() {
+  return JOB_ROLES.map((role: any) => ({
+    role_name: role.jobRole,
+    required_skills: (role.requiredSkills || []).map((s: any) => (typeof s === "string" ? s : s.name)).filter(Boolean),
+    domain: role.domain || "Full Stack",
+    difficulty: "Intermediate"
+  }));
+}
+
+function inferSkillsFromCareerSummary(summary: string) {
+  const text = summary.toLowerCase();
+  const candidates = new Map<string, number>();
+
+  const getHeuristicProficiency = (skill: string) => {
+    const local = text.slice(Math.max(0, text.indexOf(skill.toLowerCase()) - 80), text.indexOf(skill.toLowerCase()) + 80);
+    if (/expert|advanced|architect|lead|senior/.test(local)) return 0.9;
+    if (/intermediate|mid|worked on|experience/.test(local)) return 0.7;
+    if (/beginner|learning|started|new to/.test(local)) return 0.4;
+    return 0.6;
+  };
+
+  for (const skill of MASTER_SKILLS) {
+    const canonical = normalizeSkill(skill.name);
+    const terms = [skill.name, ...(SYNONYMS.find(s => normalizeSkill(s.skill) === canonical)?.synonyms || [])];
+    for (const term of terms) {
+      const pattern = new RegExp(`\\b${term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").toLowerCase()}\\b`, "i");
+      if (pattern.test(text)) {
+        const inferred = getHeuristicProficiency(term);
+        const prev = candidates.get(canonical) || 0;
+        candidates.set(canonical, Math.max(prev, inferred));
+      }
+    }
+  }
+
+  return Array.from(candidates.entries()).map(([name, proficiencyLevel]) => ({ skillName: name, proficiencyLevel }));
 }
 
 // --- LinkedIn OAuth ---
@@ -367,7 +457,23 @@ app.get("/api/auth/linkedin/callback", async (req, res) => {
 const analyzeSchema = z.object({
   userId: z.string().uuid().optional(),
   jobRoleId: z.string().uuid(),
-  userSkills: z.array(z.union([z.string(), z.object({ skillName: z.string(), proficiencyLevel: z.number().optional() })])).optional()
+  userSkills: z.array(z.union([
+    z.string(),
+    z.object({
+      skillName: z.string().optional(),
+      name: z.string().optional(),
+      proficiencyLevel: z.number().optional(),
+      proficiency: z.union([z.number(), z.string()]).optional()
+    })
+  ])).optional(),
+  careerSummary: z
+    .string()
+    .max(5000)
+    .optional()
+    .transform((s) => {
+      const t = (s || "").trim();
+      return t.length >= 10 ? t : undefined;
+    })
 });
 
 app.post("/api/analyze", requireAuth, async (req, res) => {
@@ -376,7 +482,7 @@ app.post("/api/analyze", requireAuth, async (req, res) => {
     if (!parsed.success) {
       return apiError(res, 400, "VALIDATION_ERROR", "Invalid analyze payload", parsed.error.flatten());
     }
-    const { userId, jobRoleId, userSkills: providedSkills } = parsed.data;
+    const { userId, jobRoleId, userSkills: providedSkills, careerSummary } = parsed.data;
     const authReq = req as AuthedRequest;
     if (authReq.authUser?.id && userId && authReq.authUser.id !== userId && !authReq.isAdmin) {
       return apiError(res, 403, "FORBIDDEN", "Forbidden for this userId");
@@ -385,21 +491,50 @@ app.post("/api/analyze", requireAuth, async (req, res) => {
     
     let userSkillsFull = [];
     
-    const [{ data: skillsRows }, { data: roleData, error: roleErr }] = await Promise.all([
+    const [{ data: skillsRows }, { data: roleData, error: roleErr }, { data: trendsRows }] = await Promise.all([
       supabaseAdmin!.from("user_skills").select("*").eq("user_id", effectiveUserId),
-      supabaseAdmin!.from("job_roles").select("*").eq("id", jobRoleId).maybeSingle()
+      supabaseAdmin!.from("job_roles").select("*").eq("id", jobRoleId).maybeSingle(),
+      supabaseAdmin!.from("trends").select("skill_name,demand_score")
     ]);
     if (roleErr || !roleData) {
       return apiError(res, 404, "NOT_FOUND", "Job role not found");
     }
-    userSkillsFull = (skillsRows || []).map((row: any) => ({
+    const fromDb = (skillsRows || []).map((row: any) => ({
       skillName: row.skill_name,
       proficiencyLevel: row.proficiency === "Advanced" ? 1 : row.proficiency === "Intermediate" ? 0.7 : 0.3
     }));
+    const providedMapped = (providedSkills || []).map((s: any) => ({
+      skillName: s.skillName || s.name || "",
+      proficiencyLevel: proficiencyToLevel(s.proficiencyLevel ?? s.proficiency)
+    }));
+    const inferredFromSummary = careerSummary ? inferSkillsFromCareerSummary(careerSummary) : [];
+    const merged = new Map<string, number>();
+    fromDb.forEach((s) => {
+      if (!s.skillName) return;
+      const key = normalizeSkill(s.skillName);
+      merged.set(key, Math.max(merged.get(key) || 0, s.proficiencyLevel));
+    });
+    providedMapped.forEach((s) => {
+      if (!s.skillName) return;
+      const key = normalizeSkill(s.skillName);
+      merged.set(key, Math.max(merged.get(key) || 0, s.proficiencyLevel));
+    });
+    inferredFromSummary.forEach((s) => {
+      if (!s.skillName) return;
+      const key = normalizeSkill(s.skillName);
+      merged.set(key, Math.max(merged.get(key) || 0, s.proficiencyLevel || 0.5));
+    });
+    userSkillsFull = Array.from(merged.entries()).map(([skillName, proficiencyLevel]) => ({ skillName, proficiencyLevel }));
     const requiredSkills = roleData.required_skills || [];
     const domain = roleData.domain;
-    
-    const analysis = analyzeGaps(userSkillsFull, requiredSkills, domain);
+    const demandMap = Object.fromEntries((trendsRows || []).map((row: any) => [normalizeSkill(row.skill_name), row.demand_score]));
+    const analysisBase = analyzeGaps(userSkillsFull, requiredSkills, domain, demandMap);
+    const analysis = {
+      ...analysisBase,
+      jobRole: roleData.role_name || analysisBase.jobRole,
+      careerSummary: careerSummary || null,
+      inferredSkills: inferredFromSummary
+    };
     auditLog("analyze.success", { userId: effectiveUserId, jobRoleId, similarity: analysis.similarity, gapScore: analysis.gapScore });
     res.json(analysis);
   } catch (error: any) {
@@ -443,6 +578,29 @@ app.get("/api/industry-trends", async (req, res) => {
     res.json(trends);
   } catch (error: any) {
     apiError(res, 500, "SERVER_ERROR", "Failed to fetch trends", error.message);
+  }
+});
+
+app.get("/api/job-roles", requireAuth, async (req, res) => {
+  try {
+    let { data: roles, error } = await supabaseAdmin!.from("job_roles").select("*").order("role_name");
+    if (error) throw error;
+
+    // Fresh DB fallback: bootstrap default roles automatically.
+    if (!roles || roles.length === 0) {
+      const roleRows = getDefaultRoleRows();
+      if (roleRows.length) {
+        const { error: upsertErr } = await supabaseAdmin!.from("job_roles").upsert(roleRows, { onConflict: "role_name" });
+        if (upsertErr) throw upsertErr;
+      }
+      const refetch = await supabaseAdmin!.from("job_roles").select("*").order("role_name");
+      if (refetch.error) throw refetch.error;
+      roles = refetch.data || [];
+    }
+
+    return res.json(roles || []);
+  } catch (error: any) {
+    return apiError(res, 500, "SERVER_ERROR", "Failed to fetch job roles", error.message);
   }
 });
 
@@ -493,12 +651,7 @@ app.post("/api/admin/seed", requireAuth, requireAdmin, async (req, res) => {
     }
 
     // 3) Job roles
-    const roleRows = JOB_ROLES.map((role: any) => ({
-      role_name: role.jobRole,
-      required_skills: role.requiredSkills || [],
-      domain: role.domain || "Full Stack",
-      difficulty: "Intermediate"
-    }));
+    const roleRows = getDefaultRoleRows();
     if (roleRows.length) {
       const { error } = await supabaseAdmin!.from("job_roles").upsert(roleRows, { onConflict: "role_name" });
       if (error) throw error;

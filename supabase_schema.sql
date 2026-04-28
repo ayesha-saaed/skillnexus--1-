@@ -156,3 +156,19 @@ for select using (
   )
 );
 
+-- Skill development timeline (adds / updates / deletes on user_skills)
+create table if not exists public.skill_development_events (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  skill_name text not null,
+  event_type text not null check (event_type in ('added', 'updated', 'deleted')),
+  detail jsonb default '{}'::jsonb,
+  created_at timestamptz default now()
+);
+
+alter table public.skill_development_events enable row level security;
+
+drop policy if exists "skill events owner read/write" on public.skill_development_events;
+create policy "skill events owner read/write" on public.skill_development_events
+for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+

@@ -21,6 +21,7 @@ interface Resource {
   platform: string;
   duration?: string;
   rating?: number;
+  domain?: string;
 }
 
 interface LibraryProps {
@@ -43,6 +44,7 @@ export function Library({ onNavigate }: LibraryProps) {
   const [showOnlyGaps, setShowOnlyGaps] = useState(false);
   const [userSkills, setUserSkills] = useState<string[]>([]);
   const [showFilters, setShowFilters] = useState(false);
+  const [preferredRole, setPreferredRole] = useState<string>('');
 
   const DOMAINS = [
     { name: 'Full Stack', icon: Layers, color: 'text-indigo-400', bg: 'bg-indigo-400/10', border: 'border-indigo-500/20' },
@@ -83,7 +85,7 @@ export function Library({ onNavigate }: LibraryProps) {
         duration: doc.duration,
         rating: doc.rating,
         domain: doc.domain
-      } as any as Resource));
+      } as Resource));
       setResources(resData);
 
       const { data: sessionData } = await supabase.auth.getSession();
@@ -121,6 +123,27 @@ export function Library({ onNavigate }: LibraryProps) {
         progMap[p.resourceId] = p;
       });
       setProgress(progMap);
+
+      const preferredDomain = localStorage.getItem('library.preferredDomain');
+      const preferredRoleName = localStorage.getItem('library.preferredRole');
+      const preferredMissingRaw = localStorage.getItem('library.preferredMissingSkills');
+      if (preferredDomain && preferredDomain !== 'All') {
+        setFilterDomain(preferredDomain);
+      }
+      if (preferredRoleName) {
+        setPreferredRole(preferredRoleName);
+      }
+      if (preferredMissingRaw) {
+        try {
+          const missingSkills = JSON.parse(preferredMissingRaw) as string[];
+          if (Array.isArray(missingSkills) && missingSkills.length > 0) {
+            setSearch(missingSkills[0]);
+            setShowOnlyGaps(true);
+          }
+        } catch {
+          // Ignore malformed localStorage payload.
+        }
+      }
     } catch (e: any) {
       console.error("Library load error:", e);
       setError(e.message || "Failed to load curriculum data.");
@@ -259,6 +282,15 @@ export function Library({ onNavigate }: LibraryProps) {
       </div>
 
       {/* Recommendations Bar */}
+      {preferredRole && (
+        <div className="theme-card border-blue-500/20 bg-blue-500/5">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-blue-300">Role-linked library mode</p>
+          <p className="mt-2 text-xs text-zinc-300">
+            Showing learning resources prioritized for <span className="font-bold text-white">{preferredRole}</span> and its domain.
+          </p>
+        </div>
+      )}
+
       {recommendedResources.length > 0 && !search && (
         <div className="space-y-6">
           <h2 className="text-xs font-bold text-zinc-400 uppercase tracking-[0.2em] flex items-center gap-2">
@@ -540,7 +572,18 @@ export function Library({ onNavigate }: LibraryProps) {
           </div>
           {search || filterDomain !== 'All' ? (
             <button 
-              onClick={() => { setSearch(''); setFilterType('All'); setFilterDifficulty('All'); setFilterDomain('All'); }}
+              onClick={() => {
+                setSearch('');
+                setFilterType('All');
+                setFilterDifficulty('All');
+                setFilterDomain('All');
+                setShowOnlyGaps(false);
+                setPreferredRole('');
+                localStorage.removeItem('library.preferredDomain');
+                localStorage.removeItem('library.preferredRole');
+                localStorage.removeItem('library.preferredMissingSkills');
+                localStorage.removeItem('library.preferredRoleSkills');
+              }}
               className="px-6 py-3 bg-white/5 border border-white/10 rounded-xl text-[10px] font-bold text-blue-400 hover:text-white transition-all uppercase tracking-widest"
             >
               Reset All Filters
