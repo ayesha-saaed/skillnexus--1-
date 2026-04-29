@@ -368,9 +368,9 @@ export function SkillAnalysis({ user, onNavigate }: SkillAnalysisProps): React.J
                       backgroundColor: '#0f0f23', 
                       border: '1px solid #27272a', 
                       borderRadius: '8px',
-                      color: '#f8fafc'
+                      color: 'white'
                     }}
-                    labelStyle={{ color: '#f8fafc', fontWeight: 'bold' }}
+                    labelStyle={{ color: 'white', fontWeight: 'bold' }}
                   />
                   <Bar dataKey="required" stackId="a" fill="#6b728020" name="Required" stroke="#ffffff" strokeWidth={1.5} />
                   <Bar dataKey="yourScore" stackId="a" name="Your Level" stroke="#ffffff" strokeWidth={1.5}>

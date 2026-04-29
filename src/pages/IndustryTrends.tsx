@@ -17,7 +17,7 @@ import {
   PolarAngleAxis
 } from 'recharts';
 import { TrendingUp, Flame, Globe, Zap, Info, ArrowUpRight, BarChart3, Lightbulb, Compass, Target } from 'lucide-react';
-import { motion } from 'motion/react';
+import { motion } from 'framer-motion';
 
 interface IndustryTrendsProps {
   onNavigate: (page: any) => void;
@@ -74,22 +74,8 @@ export function IndustryTrends({ onNavigate }: IndustryTrendsProps) {
           setTrends([]);
         }
       } catch (e) {
-        console.error(e);
-        // Mock fallback data
-        setTrends([
-          { skillName: 'React', demandScore: 95, growth: '+12%' },
-          { skillName: 'TypeScript', demandScore: 92, growth: '+10%' },
-          { skillName: 'Next.js', demandScore: 90, growth: '+15%' },
-          { skillName: 'Node.js', demandScore: 88, growth: '+8%' },
-          { skillName: 'Python', demandScore: 87, growth: '+6%' },
-          { skillName: 'AWS', demandScore: 93, growth: '+11%' },
-          { skillName: 'Docker', demandScore: 89, growth: '+9%' },
-          { skillName: 'PostgreSQL', demandScore: 86, growth: '+7%' },
-          { skillName: 'Kubernetes', demandScore: 91, growth: '+13%' },
-          { skillName: 'GraphQL', demandScore: 84, growth: '+5%' },
-          { skillName: 'Tailwind', demandScore: 94, growth: '+14%' },
-          { skillName: 'Prisma', demandScore: 85, growth: '+4%' }
-        ]);
+        console.error('Market data fetch failed:', e);
+        setTrends([]); // Rely on live data
       } finally {
         setLoading(false);
       }
@@ -185,7 +171,75 @@ export function IndustryTrends({ onNavigate }: IndustryTrendsProps) {
         ))}
       </div>
 
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.3 }}
+        className="theme-card overflow-hidden"
+      >
+        <div className="bg-gradient-to-r from-blue-600/20 to-emerald-600/20 border-b border-white/10 p-6 uppercase tracking-widest">
+          <div className="flex items-center gap-3">
+            <Flame className="w-6 h-6 text-yellow-400 drop-shadow-lg" />
+            <h2 className="text-xl font-black text-white">Top 10 Skills by Demand Score</h2>
+            <div className="ml-auto flex items-center gap-2 text-xs bg-white/10 px-3 py-1 rounded-full">
+              <TrendingUp className="w-3 h-3" />
+              Live Market Data
+            </div>
+          </div>
+          <p className="text-blue-200/80 text-sm mt-1 font-medium">Ranked by current demand score • Updated via global job market intelligence</p>
+        </div>
+
+        <div className="divide-y divide-white/5">
+          {sortedTrends.slice(0, 10).map((trend, index) => (
+            <motion.div
+              key={trend.skillName}
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.4 + index * 0.05 }}
+              className="p-6 hover:bg-white/5 transition-all cursor-pointer group relative"
+              onClick={() => onNavigate('analysis')}
+            >
+              <div className="absolute left-6 top-6 text-xs bg-gradient-to-r from-emerald-500/20 to-blue-500/20 text-white border border-emerald-500/30 px-2 py-1 rounded-full font-bold uppercase tracking-wider">
+                #{index + 1}
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-gradient-to-br from-white/10 to-white/5 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <div className="w-8 h-8 bg-gradient-to-r from-blue-400 to-emerald-500 rounded-xl shadow-lg" />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-white text-lg group-hover:text-blue-400 transition-colors">{trend.skillName}</h3>
+                    <p className="text-xs text-zinc-500 uppercase tracking-wider font-bold mt-0.5">High Demand</p>
+                  </div>
+                </div>
+
+                <div className="text-right space-y-1">
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-2xl font-black text-white bg-gradient-to-r from-emerald-400 via-emerald-500 to-teal-500 bg-clip-text text-transparent">
+                      {trend.demandScore}
+                    </span>
+                    <span className="text-xs text-zinc-500">/100</span>
+                  </div>
+                  <div className="flex items-center gap-1 text-sm font-bold text-emerald-400">
+                    <TrendingUp className="w-3 h-3" />
+                    {trend.growth}
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          ))}
+        </div>
+
+        {sortedTrends.length === 0 && !loading && (
+          <div className="p-12 text-center">
+            <p className="text-zinc-500 text-sm">No market data available. Check back soon!</p>
+          </div>
+        )}
+      </motion.div>
+
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+
         {/* Main Data Visualization */}
         <div className="lg:col-span-8 space-y-6">
           <div className="theme-card p-1">

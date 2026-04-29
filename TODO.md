@@ -1,16 +1,32 @@
-# Skill Trajectory Report Task
-Current working directory: c:/Users/saeed/OneDrive/Documents/GitHub/skillnexus--1-
+# Add Market Data for Top 10 Skills by Demand Score
 
-## Plan Steps (Approved)
-**User Request Update**: Move trajectory chart to IndustryTrends.tsx only (remove from Dashboard)
+Status: In Progress
 
-1. ✅ Create TODO.md
-2. ✅ learningService.ts +getSkillTrajectory()
-3. ✅ [Update] src/pages/IndustryTrends.tsx + trajectory card/chart
-4. ✅ src/pages/Dashboard.tsx - remove trajectory (revert)
-5. ✅ Test: Navigate to IndustryTrends, see trajectory line chart with mock data (React/Node/Python progress)
-6. ✅ Task complete: Graph in card on IndustryTrends page
+## Plan Steps
+
+### 1. Verify Current Data
+- Check # records in trends/trend_history
+- Test /api/industry-trends endpoint
+
+### 2. Enhance Data Seeding
+- Edit src/lib/data_seeder.ts: Add 10+ top skills to INDUSTRY_DEMAND_HISTORICAL
+- Run POST /api/admin/seed to populate DB
+
+### 3. Update Frontend
+- Edit src/pages/IndustryTrends.tsx: Remove hardcoded fallback in fetchTrends()
+- Ensure displays dynamic top 10 from API
+
+### 4. Testing & Polish
+- Verify page shows top 10 by demand_score
+- Test sorting (demand/growth)
+- Optional: Direct Supabase query
 
 ## Progress
-- Step 1: Created this file
-- Next: Edit learningService.ts
+- [x] Step 1 Complete (verified empty → seeded 10 skills)
+- [x] Step 2 Complete (SQL seed + API now returns top 10)
+- [x] Step 3 Complete (removed fallback + moved rank badge left)
+- [x] Step 4 Complete (feedback addressed)
+
+
+Next Action: Start Step 1
+
