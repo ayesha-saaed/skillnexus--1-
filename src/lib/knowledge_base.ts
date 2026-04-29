@@ -105,6 +105,142 @@ export const JOB_ROLES = [
       { name: "Fine Tuning", importance: 0.85, requiredProficiency: 0.8 },
       { name: "LangChain", importance: 0.75, requiredProficiency: 0.7 },
     ]
+  },
+  // New domains from CSV data
+  {
+    jobRole: "Frontend Development",
+    domain: "Frontend Development",
+    requiredSkills: [
+      { name: "HTML", importance: 1.0, requiredProficiency: 0.8 },
+      { name: "CSS", importance: 1.0, requiredProficiency: 0.8 },
+      { name: "JavaScript", importance: 1.0, requiredProficiency: 0.8 },
+      { name: "TypeScript", importance: 1.0, requiredProficiency: 0.8 },
+      { name: "React", importance: 0.95, requiredProficiency: 0.8 },
+      { name: "Next.js", importance: 0.95, requiredProficiency: 0.8 },
+      { name: "Angular", importance: 0.95, requiredProficiency: 0.8 },
+      { name: "Vue.js", importance: 0.95, requiredProficiency: 0.8 },
+      { name: "Redux", importance: 0.9, requiredProficiency: 0.8 },
+      { name: "Axios", importance: 0.9, requiredProficiency: 0.8 }
+    ]
+  },
+  {
+    jobRole: "Data Science",
+    domain: "Data Science",
+    requiredSkills: [
+      { name: "Python", importance: 1.0, requiredProficiency: 0.8 },
+      { name: "R", importance: 1.0, requiredProficiency: 0.8 },
+      { name: "SQL", importance: 1.0, requiredProficiency: 0.8 },
+      { name: "Pandas", importance: 0.95, requiredProficiency: 0.8 },
+      { name: "NumPy", importance: 0.95, requiredProficiency: 0.8 },
+      { name: "Matplotlib", importance: 0.9, requiredProficiency: 0.8 },
+      { name: "Seaborn", importance: 0.9, requiredProficiency: 0.8 },
+      { name: "Plotly", importance: 0.9, requiredProficiency: 0.8 }
+    ]
+  },
+  {
+    jobRole: "DevOps",
+    domain: "DevOps",
+    requiredSkills: [
+      { name: "Bash", importance: 1.0, requiredProficiency: 0.8 },
+      { name: "Python", importance: 1.0, requiredProficiency: 0.8 },
+      { name: "Docker", importance: 0.95, requiredProficiency: 0.8 },
+      { name: "Kubernetes", importance: 0.95, requiredProficiency: 0.8 },
+      { name: "Jenkins", importance: 0.9, requiredProficiency: 0.8 },
+      { name: "GitHub Actions", importance: 0.9, requiredProficiency: 0.8 }
+    ]
+  },
+  {
+    jobRole: "Full Stack Development",
+    domain: "Full Stack Development",
+    requiredSkills: [
+      { name: "JavaScript", importance: 1.0, requiredProficiency: 0.8 },
+      { name: "TypeScript", importance: 1.0, requiredProficiency: 0.8 },
+      { name: "Next.js", importance: 0.95, requiredProficiency: 0.8 },
+      { name: "MERN", importance: 0.95, requiredProficiency: 0.8 },
+      { name: "MEAN", importance: 0.95, requiredProficiency: 0.8 },
+      { name: "Redux", importance: 0.9, requiredProficiency: 0.8 },
+      { name: "Axios", importance: 0.9, requiredProficiency: 0.8 },
+      { name: "Docker", importance: 0.85, requiredProficiency: 0.8 },
+      { name: "MongoDB", importance: 0.8, requiredProficiency: 0.8 },
+      { name: "Node.js", importance: 0.9, requiredProficiency: 0.8 }
+    ]
+  },
+  {
+    jobRole: "Backend Development",
+    domain: "Backend Development",
+    requiredSkills: [
+      { name: "JavaScript", importance: 1.0, requiredProficiency: 0.8 },
+      { name: "Python", importance: 1.0, requiredProficiency: 0.8 },
+      { name: "Java", importance: 1.0, requiredProficiency: 0.8 },
+      { name: "Go", importance: 1.0, requiredProficiency: 0.8 },
+      { name: "Node.js", importance: 0.95, requiredProficiency: 0.8 },
+      { name: "Express.js", importance: 0.95, requiredProficiency: 0.8 },
+      { name: "Django", importance: 0.95, requiredProficiency: 0.8 },
+      { name: "Spring Boot", importance: 0.95, requiredProficiency: 0.8 },
+      { name: "JWT", importance: 0.9, requiredProficiency: 0.8 },
+      { name: "MongoDB", importance: 0.9, requiredProficiency: 0.8 }
+    ]
+  },
+  {
+    jobRole: "UI/UX Design",
+    domain: "UI/UX Design",
+    requiredSkills: [
+      { name: "Figma", importance: 0.95, requiredProficiency: 0.8 },
+      { name: "Adobe XD", importance: 0.95, requiredProficiency: 0.8 },
+      { name: "Sketch", importance: 0.95, requiredProficiency: 0.8 }
+    ]
+  },
+  {
+    jobRole: "Cybersecurity",
+    domain: "Cybersecurity",
+    requiredSkills: [
+      { name: "Python", importance: 1.0, requiredProficiency: 0.8 },
+      { name: "C", importance: 1.0, requiredProficiency: 0.8 },
+      { name: "JavaScript", importance: 1.0, requiredProficiency: 0.8 },
+      { name: "CryptoJS", importance: 0.9, requiredProficiency: 0.8 },
+      { name: "Wireshark", importance: 0.9, requiredProficiency: 0.8 },
+      { name: "Nmap", importance: 0.9, requiredProficiency: 0.8 },
+      { name: "Metasploit", importance: 0.9, requiredProficiency: 0.8 }
+    ]
+  },
+  {
+    jobRole: "Cloud Computing",
+    domain: "Cloud Computing",
+    requiredSkills: [
+      { name: "Python", importance: 1.0, requiredProficiency: 0.8 },
+      { name: "JavaScript", importance: 1.0, requiredProficiency: 0.8 },
+      { name: "AWS", importance: 0.95, requiredProficiency: 0.8 },
+      { name: "Azure", importance: 0.95, requiredProficiency: 0.8 },
+      { name: "GCP", importance: 0.95, requiredProficiency: 0.8 }
+    ]
+  },
+  {
+    jobRole: "AI / Machine Learning",
+    domain: "AI / Machine Learning",
+    requiredSkills: [
+      { name: "Python", importance: 1.0, requiredProficiency: 0.8 },
+      { name: "TensorFlow", importance: 0.95, requiredProficiency: 0.8 },
+      { name: "PyTorch", importance: 0.95, requiredProficiency: 0.8 },
+      { name: "Scikit-learn", importance: 0.9, requiredProficiency: 0.8 },
+      { name: "NLTK", importance: 0.9, requiredProficiency: 0.8 },
+      { name: "OpenCV", importance: 0.9, requiredProficiency: 0.8 },
+      { name: "Colab", importance: 0.85, requiredProficiency: 0.8 },
+      { name: "Jupyter", importance: 0.85, requiredProficiency: 0.8 }
+    ]
+  },
+  {
+    jobRole: "Mobile Development",
+    domain: "Mobile Development",
+    requiredSkills: [
+      { name: "Dart", importance: 1.0, requiredProficiency: 0.8 },
+      { name: "Java", importance: 1.0, requiredProficiency: 0.8 },
+      { name: "Kotlin", importance: 1.0, requiredProficiency: 0.8 },
+      { name: "Swift", importance: 1.0, requiredProficiency: 0.8 },
+      { name: "Flutter", importance: 0.95, requiredProficiency: 0.8 },
+      { name: "React Native", importance: 0.95, requiredProficiency: 0.8 },
+      { name: "Android Studio", importance: 0.85, requiredProficiency: 0.8 },
+      { name: "Xcode", importance: 0.85, requiredProficiency: 0.8 }
+    ]
   }
 ];
 
@@ -119,6 +255,14 @@ export const INDUSTRY_DEMAND = [
   { skill: "Next.js", demandScore: 91, growthRate: 35.6, year: 2026 },
 ];
 
+export const PROFICIENCY_SCORES: Record<string, number> = {
+  'Beginner': 0.3,
+  'Intermediate': 0.7,
+  'Advanced': 1.0
+};
+
+export const DEFAULT_REQUIRED_PROFICIENCY = 0.8; // Job role threshold
+
 export const LEARNING_RESOURCES = [
   { title: "The Joy of React", type: "Course", platform: "Josh W Comeau", skillsCovered: ["React", "JavaScript"], difficulty: "Intermediate", duration: "40h", rating: 4.9, domain: "Frontend" },
   { title: "TypeScript for Pro Developers", type: "Article", platform: "TypeScript Org", skillsCovered: ["TypeScript"], difficulty: "Intermediate", duration: "2h", rating: 4.8, domain: "Frontend" },
@@ -126,3 +270,4 @@ export const LEARNING_RESOURCES = [
   { title: "Node.js Design Patterns", type: "Book", platform: "Packt", skillsCovered: ["Node.js", "JavaScript"], difficulty: "Advanced", duration: "25h", rating: 4.7, domain: "Backend" },
   { title: "LangChain Crash Course", type: "Video", platform: "YouTube", skillsCovered: ["LangChain", "AI"], difficulty: "Beginner", duration: "3h", rating: 4.5, domain: "AI / Machine Learning" },
 ];
+

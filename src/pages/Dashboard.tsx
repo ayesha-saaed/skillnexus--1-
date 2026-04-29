@@ -2,11 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { User, supabase } from '../lib/firebase';
 import { motion } from 'motion/react';
 import {
+  ResponsiveContainer,
   Radar,
   RadarChart,
   PolarGrid,
   PolarAngleAxis,
-  ResponsiveContainer,
 } from 'recharts';
 import {
   Award,
@@ -128,7 +128,7 @@ export const Dashboard = React.memo(function Dashboard({ user, onNavigate }: Das
     totalEnrolled: 0,
     totalTime: 0,
   });
-  const [skillDevEvents, setSkillDevEvents] = useState<any[]>([]);
+
 
   useEffect(() => {
     let cancelled = false;
@@ -137,16 +137,10 @@ export const Dashboard = React.memo(function Dashboard({ user, onNavigate }: Das
       setLoading(true);
       try {
         // ✅ Parallel queries instead of sequential
-        const [skillsRes, progRes, profileRes, devRes] = await Promise.all([
+        const [skillsRes, progRes, profileRes] = await Promise.all([
           supabase.from('user_skills').select('*').eq('user_id', user.id),
           supabase.from('progress').select('*').eq('user_id', user.id),
           supabase.from('profiles').select('*').eq('id', user.id).maybeSingle(),
-          supabase
-            .from('skill_development_events')
-            .select('skill_name,event_type,created_at,detail')
-            .eq('user_id', user.id)
-            .order('created_at', { ascending: false })
-            .limit(12),
         ]);
 
         if (cancelled) return;
@@ -154,8 +148,6 @@ export const Dashboard = React.memo(function Dashboard({ user, onNavigate }: Das
         if (skillsRes.error) throw skillsRes.error;
         if (progRes.error) throw progRes.error;
         if (profileRes.error) throw profileRes.error;
-        if (!devRes.error && devRes.data) setSkillDevEvents(devRes.data);
-        else setSkillDevEvents([]);
 
         try {
           const analytics = await learningService.getLearningAnalytics(user.id);
@@ -215,11 +207,7 @@ export const Dashboard = React.memo(function Dashboard({ user, onNavigate }: Das
     };
   }, [user.id]);
 
-  const chartData = skills.map((s) => ({
-    subject: s.skillName,
-    A: proficiencyMap[s.proficiency] || 0,
-    fullMark: 100,
-  }));
+
 
   // ─── Loading State with Skeleton UI ───
   if (loading) {
@@ -270,6 +258,9 @@ export const Dashboard = React.memo(function Dashboard({ user, onNavigate }: Das
           Add Skills <ArrowRight className="w-3.5 h-3.5" />
         </button>
       </div>
+
+      {/* Skill Trajectory Report Card */}
+
 
       {/* Stats Grid — Dynamic Data */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -397,21 +388,7 @@ export const Dashboard = React.memo(function Dashboard({ user, onNavigate }: Das
               <LineChart className="w-3.5 h-3.5" />
               Recent skill activity
             </p>
-            {skillDevEvents.length > 0 ? (
-              <ul className="space-y-2 max-h-40 overflow-y-auto pr-1">
-                {skillDevEvents.map((ev: any) => (
-                  <li
-                    key={ev.created_at + ev.skill_name + ev.event_type}
-                    className="flex justify-between gap-2 text-[10px] text-zinc-400"
-                  >
-                    <span className="truncate font-semibold text-zinc-200">{ev.skill_name}</span>
-                    <span className="shrink-0 uppercase tracking-tighter text-zinc-500">{ev.event_type}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-[10px] text-zinc-600 uppercase tracking-widest">No skill timeline rows yet (run SQL bundle if needed).</p>
-            )}
+            <p className="text-[10px] text-zinc-600 uppercase tracking-widest">No skill timeline rows yet (run SQL bundle if needed).</p>
           </div>
           <button
             type="button"
@@ -424,165 +401,81 @@ export const Dashboard = React.memo(function Dashboard({ user, onNavigate }: Das
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Radar Chart */}
-        <div className="lg:col-span-8 theme-card relative flex flex-col">
-          <div className="flex justify-between items-start mb-10">
-            <div>
-              <h2 className="text-sm font-bold text-white uppercase tracking-widest">
-                Skill Overview
-              </h2>
-              <p className="text-[10px] text-zinc-500 mt-1 uppercase">
-                Visualizing your current expertise
-              </p>
-            </div>
-            <div className="flex space-x-4">
-              <div className="flex items-center text-[9px] uppercase tracking-widest text-zinc-500">
-                <span className="w-2 h-2 rounded-full bg-blue-500 mr-2"></span>{' '}
-                Your Level
+      {/* Skills Inventory */}
+      <div className="theme-card flex flex-col h-full">
+        <div className="flex items-center justify-between mb-8">
+          <h2 className="text-sm font-bold text-white uppercase tracking-widest">
+            Inventory
+          </h2>
+          <button
+            onClick={() => onNavigate('add-skill')}
+            className="text-[10px] text-zinc-500 uppercase font-bold hover:text-white transition-colors"
+          >
+            Manage
+          </button>
+        </div>
+        <div className="space-y-5 flex-1">
+          {skills.slice(0, 12).map((skill, i) => (
+            <div
+              key={skill.id || i}
+              className="flex items-center space-x-4 group cursor-pointer"
+            >
+              <div className="w-10 h-10 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-zinc-400 group-hover:text-blue-400 group-hover:border-blue-500/30 transition-all">
+                <Star className="w-4 h-4" />
               </div>
-            </div>
-          </div>
-
-          <div className="h-[350px] w-full relative flex items-center justify-center overflow-hidden">
-            {chartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
-                <RadarChart
-                  cx="50%"
-                  cy="50%"
-                  outerRadius="80%"
-                  data={chartData}
-                >
-                  <PolarGrid stroke="#222" />
-                  <PolarAngleAxis
-                    dataKey="subject"
-                    tick={{ fill: '#555', fontSize: 10, fontWeight: 600 }}
+              <div className="flex-1 min-w-0">
+                <div className="flex justify-between items-baseline mb-1.5">
+                  <p className="text-xs font-semibold text-zinc-200 truncate">
+                    {skill.skillName}
+                  </p>
+                  <span
+                    className={cn(
+                      'theme-tag',
+                      skill.proficiency === 'Advanced'
+                        ? 'theme-tag-emerald'
+                        : skill.proficiency === 'Intermediate'
+                          ? 'theme-tag-blue'
+                          : 'theme-tag-rose'
+                    )}
+                  >
+                    {skill.proficiency}
+                  </span>
+                </div>
+                <div className="theme-progress-bar h-1">
+                  <div
+                    className={cn(
+                      'theme-progress-fill',
+                      skill.proficiency === 'Advanced'
+                        ? 'bg-emerald-500'
+                        : skill.proficiency === 'Intermediate'
+                          ? 'bg-blue-500'
+                          : 'bg-rose-500'
+                    )}
+                    style={{ width: `${proficiencyMap[skill.proficiency]}%` }}
                   />
-                  <Radar
-                    name="Proficiency"
-                    dataKey="A"
-                    stroke="#3b82f6"
-                    fill="#3b82f6"
-                    fillOpacity={0.15}
-                    strokeWidth={2}
-                  />
-                </RadarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="text-zinc-600 uppercase text-[10px] tracking-widest italic">
-                Awaiting skill data input...
+                </div>
               </div>
-            )}
-          </div>
-
-          <div className="mt-6 grid grid-cols-2 gap-4">
-            <div className="p-4 bg-white/5 rounded-lg border border-white/5 group hover:bg-white/[0.07] transition-all">
-              <div className="text-[10px] text-emerald-400 font-bold mb-1 uppercase tracking-widest">
-                Key Strengths
-              </div>
-              <p className="text-[11px] text-zinc-400 leading-relaxed">
-                High proficiency in{' '}
-                {skills
-                  .filter((s) => s.proficiency === 'Advanced')
-                  .slice(0, 2)
-                  .map((s) => s.skillName)
-                  .join(' & ') || 'N/A'}
-                .
+            </div>
+          ))}
+          {skills.length === 0 && (
+            <div className="h-full flex flex-col items-center justify-center py-20 text-zinc-600">
+              <Award className="w-8 h-8 mb-4 opacity-20" />
+              <p className="text-[10px] uppercase font-bold tracking-widest">
+                No assets logged
               </p>
             </div>
-            <div className="p-4 bg-white/5 rounded-lg border border-white/5 group hover:bg-white/[0.07] transition-all">
-              <div className="text-[10px] text-rose-400 font-bold mb-1 uppercase tracking-widest">
-                Development Needs
-              </div>
-              <p className="text-[11px] text-zinc-400 leading-relaxed">
-                Focus on scaling{' '}
-                {skills
-                  .filter((s) => s.proficiency === 'Beginner')
-                  .slice(0, 2)
-                  .map((s) => s.skillName)
-                  .join(' & ') || 'N/A'}
-                .
-              </p>
-            </div>
-          </div>
+          )}
         </div>
 
-        {/* Recent Skills List */}
-        <div className="lg:col-span-4 theme-card flex flex-col h-full">
-          <div className="flex items-center justify-between mb-8">
-            <h2 className="text-sm font-bold text-white uppercase tracking-widest">
-              Inventory
-            </h2>
-            <button
-              onClick={() => onNavigate('add-skill')}
-              className="text-[10px] text-zinc-500 uppercase font-bold hover:text-white transition-colors"
-            >
-              Manage
-            </button>
-          </div>
-          <div className="space-y-5 flex-1">
-            {skills.slice(0, 6).map((skill, i) => (
-              <div
-                key={skill.id || i}
-                className="flex items-center space-x-4 group cursor-pointer"
-              >
-                <div className="w-10 h-10 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-zinc-400 group-hover:text-blue-400 group-hover:border-blue-500/30 transition-all">
-                  <Star className="w-4 h-4" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex justify-between items-baseline mb-1.5">
-                    <p className="text-xs font-semibold text-zinc-200 truncate">
-                      {skill.skillName}
-                    </p>
-                    <span
-                      className={cn(
-                        'theme-tag',
-                        skill.proficiency === 'Advanced'
-                          ? 'theme-tag-emerald'
-                          : skill.proficiency === 'Intermediate'
-                            ? 'theme-tag-blue'
-                            : 'theme-tag-rose'
-                      )}
-                    >
-                      {skill.proficiency}
-                    </span>
-                  </div>
-                  <div className="theme-progress-bar h-1">
-                    <div
-                      className={cn(
-                        'theme-progress-fill',
-                        skill.proficiency === 'Advanced'
-                          ? 'bg-emerald-500'
-                          : skill.proficiency === 'Intermediate'
-                            ? 'bg-blue-500'
-                            : 'bg-rose-500'
-                      )}
-                      style={{ width: `${proficiencyMap[skill.proficiency]}%` }}
-                    />
-                  </div>
-                </div>
-              </div>
-            ))}
-            {skills.length === 0 && (
-              <div className="h-full flex flex-col items-center justify-center py-20 text-zinc-600">
-                <Award className="w-8 h-8 mb-4 opacity-20" />
-                <p className="text-[10px] uppercase font-bold tracking-widest">
-                  No assets logged
-                </p>
-              </div>
-            )}
-          </div>
-
-          <div className="pt-8 border-t border-white/5 mt-8">
-            <h4 className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest mb-4">
-              Industry Demand
-            </h4>
-            <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg border border-white/5">
-              <span className="text-[11px] text-zinc-400">Market Value</span>
-              <span className="text-[11px] font-bold text-emerald-400">
-                +1.2%
-              </span>
-            </div>
+        <div className="pt-8 border-t border-white/5 mt-8">
+          <h4 className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest mb-4">
+            Industry Demand
+          </h4>
+          <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg border border-white/5">
+            <span className="text-[11px] text-zinc-400">Market Value</span>
+            <span className="text-[11px] font-bold text-emerald-400">
+              +1.2%
+            </span>
           </div>
         </div>
       </div>

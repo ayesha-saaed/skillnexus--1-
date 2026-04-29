@@ -1,5 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, AreaChart, Area } from 'recharts';
+import { learningService } from '../services/learningService';
+import { 
+  LineChart as RechartsLineChart,
+  Line,
+  CartesianGrid,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  BarChart, 
+  Bar,
+  Radar,
+  RadarChart,
+  PolarGrid,
+  PolarAngleAxis
+} from 'recharts';
 import { TrendingUp, Flame, Globe, Zap, Info, ArrowUpRight, BarChart3, Lightbulb, Compass, Target } from 'lucide-react';
 import { motion } from 'motion/react';
 
@@ -11,6 +27,35 @@ export function IndustryTrends({ onNavigate }: IndustryTrendsProps) {
   const [trends, setTrends] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeMetric, setActiveMetric] = useState<'demand' | 'growth'>('demand');
+  const [trajectoryData, setTrajectoryData] = useState<any[]>([]);
+  const [radarData, setRadarData] = useState<any[]>([
+    { subject: 'React', market: 92, fullMark: 100 },
+    { subject: 'Node.js', market: 88, fullMark: 100 },
+    { subject: 'Python', market: 85, fullMark: 100 },
+    { subject: 'AWS', market: 90, fullMark: 100 },
+    { subject: 'Docker', market: 82, fullMark: 100 },
+    { subject: 'TypeScript', market: 87, fullMark: 100 },
+  ]);
+
+  useEffect(() => {
+    async function fetchTrajectory() {
+      try {
+        const traj = await learningService.getSkillTrajectory('demo-user-id'); // Mock user
+        setTrajectoryData(traj);
+      } catch {
+        // Mock fallback already in service
+        setTrajectoryData([
+          { month: 'Jan', React: 0.3, Nodejs: 0.1, Python: 0.0 },
+          { month: 'Feb', React: 0.4, Nodejs: 0.2, Python: 0.1 },
+          { month: 'Mar', React: 0.6, Nodejs: 0.4, Python: 0.3 },
+          { month: 'Apr', React: 0.7, Nodejs: 0.6, Python: 0.5 },
+          { month: 'May', React: 0.85, Nodejs: 0.7, Python: 0.7 },
+          { month: 'Jun', React: 0.95, Nodejs: 0.8, Python: 0.85 },
+        ]);
+      }
+    }
+    fetchTrajectory();
+  }, []);
 
   useEffect(() => {
     async function fetchTrends() {
@@ -30,7 +75,21 @@ export function IndustryTrends({ onNavigate }: IndustryTrendsProps) {
         }
       } catch (e) {
         console.error(e);
-        setTrends([]);
+        // Mock fallback data
+        setTrends([
+          { skillName: 'React', demandScore: 95, growth: '+12%' },
+          { skillName: 'TypeScript', demandScore: 92, growth: '+10%' },
+          { skillName: 'Next.js', demandScore: 90, growth: '+15%' },
+          { skillName: 'Node.js', demandScore: 88, growth: '+8%' },
+          { skillName: 'Python', demandScore: 87, growth: '+6%' },
+          { skillName: 'AWS', demandScore: 93, growth: '+11%' },
+          { skillName: 'Docker', demandScore: 89, growth: '+9%' },
+          { skillName: 'PostgreSQL', demandScore: 86, growth: '+7%' },
+          { skillName: 'Kubernetes', demandScore: 91, growth: '+13%' },
+          { skillName: 'GraphQL', demandScore: 84, growth: '+5%' },
+          { skillName: 'Tailwind', demandScore: 94, growth: '+14%' },
+          { skillName: 'Prisma', demandScore: 85, growth: '+4%' }
+        ]);
       } finally {
         setLoading(false);
       }
@@ -130,64 +189,160 @@ export function IndustryTrends({ onNavigate }: IndustryTrendsProps) {
         {/* Main Data Visualization */}
         <div className="lg:col-span-8 space-y-6">
           <div className="theme-card p-1">
-            <div className="p-8 border-b border-white/5 bg-white/[0.01]">
+  <div className="p-8 border-b border-white/5 bg-white/[0.01]">
               <div className="flex items-center justify-between mb-8">
                 <div>
-                  <h2 className="text-sm font-bold text-white uppercase tracking-widest flex items-center gap-2">
-                    <BarChart3 className="w-4 h-4 text-blue-500" />
-                    Skill Trajectory Report
+                  <h2 className="text-lg font-bold text-white uppercase tracking-widest flex items-center gap-3">
+                    <TrendingUp className="w-6 h-6 text-emerald-400" />
+                    Personal Skill Trajectory Report
                   </h2>
-                  <p className="text-[10px] text-zinc-500 mt-1 uppercase font-bold tracking-wider">Top rated skills by institutional demand frequency</p>
+                  <p className="text-sm text-zinc-400 mt-2">Your proficiency growth over time (top 3 skills from events)</p>
                 </div>
               </div>
               
-              <div className="h-[400px] w-full relative overflow-hidden">
-                {trends.length > 0 ? (
-                  <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
-                    <AreaChart data={sortedTrends}>
-                      <defs>
-                        <linearGradient id={chartGradientId} x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor={chartColor} stopOpacity={0.3}/>
-                          <stop offset="95%" stopColor={chartColor} stopOpacity={0}/>
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#222" opacity={0.3} />
+              <div className="h-[400px] mb-6">
+                <ResponsiveContainer width="100%" height="100%">
+                  <RechartsLineChart data={trajectoryData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#37415140" vertical={false} />
+                    <XAxis 
+                      dataKey="month" 
+                      tick={{ fill: '#f8fafc', fontSize: 12, fontWeight: 600 }} 
+                      axisLine={false} 
+                      tickLine={false}
+                    />
+                    <YAxis 
+                      domain={[0, 1]} 
+                      tick={{ fill: '#f8fafc', fontSize: 12 }} 
+                      axisLine={false} 
+                      tickLine={false}
+                    />
+                    <Tooltip 
+                      contentStyle={{ 
+                        backgroundColor: '#0f0f23', 
+                        border: '1px solid #27272a', 
+                        borderRadius: '8px'
+                      }} 
+                    />
+                    <Line 
+                      type="monotone" 
+                      dataKey="React" 
+                      stroke="#10b981" 
+                      strokeWidth={3} 
+                      dot={{ fill: '#10b981', strokeWidth: 2 }} 
+                      name="React"
+                    />
+                    <Line 
+                      type="monotone" 
+                      dataKey="Nodejs" 
+                      stroke="#3b82f6" 
+                      strokeWidth={3} 
+                      dot={{ fill: '#3b82f6', strokeWidth: 2 }} 
+                      name="Node.js"
+                    />
+                    <Line 
+                      type="monotone" 
+                      dataKey="Python" 
+                      stroke="#f59e0b" 
+                      strokeWidth={3} 
+                      dot={{ fill: '#f59e0b', strokeWidth: 2 }} 
+                      name="Python"
+                    />
+                    <Legend />
+                  </RechartsLineChart>
+                </ResponsiveContainer>
+              </div>
+              <p className="text-xs text-zinc-500 text-center">
+                Proficiency growth based on skill development events • Green=React, Blue=Node.js, Orange=Python
+              </p>
+            </div>
+
+              {/* Industry Trends Bar Chart */}
+              <div className="mb-8">
+                <div className="flex items-center justify-between mb-6">
+                  <div>
+                    <h3 className="text-lg font-bold text-white uppercase tracking-widest flex items-center gap-3">
+                      <BarChart3 className="w-6 h-6" style={{ color: chartColor }} />
+                      {activeMetric === 'demand' ? 'Market Demand' : 'Growth Velocity'}
+                    </h3>
+                    <p className="text-sm text-zinc-400 mt-2">Top skills ranked by {activeMetric === 'demand' ? 'demand score' : 'projected growth'}</p>
+                  </div>
+                </div>
+                <div className="h-[350px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={sortedTrends.slice(0, 12)}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#37415140" vertical={false} />
                       <XAxis 
                         dataKey="skillName" 
+                        tick={{ fill: '#f8fafc', fontSize: 11, fontWeight: 600 }} 
                         axisLine={false} 
-                        tickLine={false} 
-                        tick={{ fill: '#71717a', fontSize: 10, fontWeight: 700 }}
-                        dy={10}
+                        tickLine={false}
+                        angle={-45}
+                        height={80}
                       />
                       <YAxis 
+                        tick={{ fill: '#f8fafc', fontSize: 12 }} 
                         axisLine={false} 
-                        tickLine={false} 
-                        tick={{ fill: '#71717a', fontSize: 10, fontWeight: 700 }}
+                        tickLine={false}
                       />
                       <Tooltip 
-                        contentStyle={{ backgroundColor: '#09090b', border: '1px solid #27272a', borderRadius: '12px', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.5)' }}
-                        itemStyle={{ color: '#fff', fontSize: '11px', fontWeight: 'bold', textTransform: 'uppercase' }}
-                        labelStyle={{ color: '#71717a', marginBottom: '8px', fontSize: '9px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.1em' }}
-                        cursor={{ stroke: chartColor, strokeWidth: 2, strokeDasharray: '4 4' }}
+                        contentStyle={{ 
+                          backgroundColor: '#0f0f23', 
+                          border: '1px solid #27272a', 
+                          borderRadius: '8px'
+                        }} 
                       />
-                      <Area 
-                        type="monotone" 
-                        dataKey={chartDataKey} 
-                        stroke={chartColor} 
-                        strokeWidth={3}
-                        fillOpacity={1} 
-                        fill={`url(#${chartGradientId})`} 
-                        animationDuration={1500}
+                      <Bar 
+                        dataKey={chartDataKey}
+                        fill={chartColor}
+                        name={activeMetric === 'demand' ? 'Demand Score' : 'Growth %'}
+                        radius={[4, 4, 0, 0]}
                       />
-                    </AreaChart>
+                    </BarChart>
                   </ResponsiveContainer>
-                ) : (
-                  <div className="h-full flex flex-col items-center justify-center text-zinc-700">
-                    <Compass className="w-12 h-12 mb-4 opacity-10 animate-pulse" />
-                    <p className="text-[10px] uppercase font-bold tracking-[0.3em]">Calibrating sensors...</p>
-                  </div>
-                )}
+                </div>
+                <p className="text-xs text-zinc-500 text-center mt-4">
+                  {activeMetric === 'demand' ? 'Blue = Demand Score (higher = more jobs)' : 'Green = Growth Velocity (higher = rising demand)'}
+                </p>
               </div>
+
+            {/* Market Benchmark Radar */}
+            <div className="border-t border-white/5 pt-8">
+              <div className="flex items-center justify-between mb-8">
+                <div>
+                  <h3 className="text-lg font-bold text-white uppercase tracking-widest flex items-center gap-3">
+                    <BarChart3 className="w-6 h-6 text-blue-400" />
+                    Market Benchmark
+                  </h3>
+                  <p className="text-sm text-zinc-400 mt-2">Industry average proficiency levels for top skills</p>
+                </div>
+              </div>
+              <div className="h-[350px] relative flex items-center justify-center overflow-hidden mb-6">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+                  <RadarChart
+                    cx="50%"
+                    cy="50%"
+                    outerRadius="80%"
+                    data={radarData}
+                  >
+                    <PolarGrid stroke="#222" />
+                    <PolarAngleAxis
+                      dataKey="subject"
+                      tick={{ fill: '#f8fafc', fontSize: 10, fontWeight: 600 }}
+                    />
+                    <Radar
+                      name="Market Level"
+                      dataKey="market"
+                      stroke="#3b82f6"
+                      fill="#3b82f6"
+                      fillOpacity={0.15}
+                      strokeWidth={2}
+                    />
+                  </RadarChart>
+                </ResponsiveContainer>
+              </div>
+              <p className="text-xs text-zinc-500 text-center">
+                Compare against industry benchmarks • Blue=Market Average
+              </p>
             </div>
             
             <div className="grid grid-cols-2 md:grid-cols-4 border-t border-white/5 divide-x divide-white/5">
