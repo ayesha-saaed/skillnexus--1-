@@ -22,8 +22,9 @@ export default function App() {
     const unsubscribe = onAuthStateChanged(async (u) => {
       try {
         setUser(u);
-        if (u) {
-          const isAdminEmail = u.email === 'saeedayesha995@gmail.com';
+if (u) {
+          const adminEmails = ['saeedayesha995@gmail.com', 'fazeelmaqsood38@gmail.com'];
+          const isAdminEmail = adminEmails.includes(u.email || '');
           const profileData = {
             id: u.id,
             name: u.user_metadata?.full_name || u.email?.split('@')[0] || 'New User',

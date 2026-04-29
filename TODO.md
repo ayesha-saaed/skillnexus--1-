@@ -1,43 +1,41 @@
-# Admin Dashboard Implementation Plan
-Approved by user. Breaking down into logical steps. Will update progress.
+# TODO: Add Domains, Skills, and Learning Resources to Admin Panel
 
-## Step 1: Database Schema Updates [WAITING USER ACTION]
-- [x] Create `skills` table (domain_id FK)
-- [x] Update `resources` (add skill_ids[])
-- [x] Add admin RLS policies (full CRUD)
-- [x] Seed initial domains/skills from knowledge_base.ts
-- [x] Create `add_admin_schema.sql` **(USER: Run in Supabase SQL Editor!)**
+## Plan Overview
+Since the user has approved the plan, here's the breakdown of tasks:
 
+## Steps from Approved Plan
 
-## Step 2: Install Dependencies [PENDING]
-- [ ] shadcn: table, dialog, form, toast, card, badge, button
-- [ ] recharts, lucide-react (if missing)
-- [ ] zod, @hookform/resolvers
+### Step 1: Update DomainManagement.tsx
+- [ ] Add languages, frameworks, libraries, tools, full_stack fields to the Domain interface
+- [ ] Update form in modal to include new fields:
+  - [ ] languages (array input)
+  - [ ] frameworks (array input)
+  - [ ] libraries (array input)
+  - [ ] tools (array input)
+  - [ ] full_stack (JSON object input)
 
-## Step 3: Admin Auth & Layout [PENDING]
-- [ ] src/lib/useAdmin.ts hook
-- [ ] src/pages/AdminLogin.tsx
-- [ ] src/components/AdminLayout.tsx (sidebar)
-- [ ] Update App.tsx routes/protection
+### Step 2: Update SkillManagement.tsx
+- [ ] Add tools and frameworks fields to the Skill interface
+- [ ] Update form in modal to include new fields:
+  - [ ] tools (array input)
+  - [ ] frameworks (array input)
 
-## Step 4: Admin Pages [PENDING]
-- [ ] src/pages/admin/Overview.tsx (stats/charts)
-- [ ] src/pages/admin/Domains.tsx (CRUD)
-- [ ] src/pages/admin/Skills.tsx (CRUD, domain select)
-- [ ] src/pages/admin/Resources.tsx (full form, filters)
-- [ ] src/pages/admin/Users.tsx (mgmt)
-- [ ] Refactor existing Admin.tsx
+### Step 3: Update ResourceManagement.tsx
+- [ ] Add provider, rating, thumbnail, is_featured fields to the Resource interface
+- [ ] Update form in modal to include new fields:
+  - [ ] provider (text input)
+  - [ ] rating (number input)
+  - [ ] thumbnail (URL input)
+  - [ ] is_featured (boolean toggle)
 
-## Step 5: Components & Utils [PENDING]
-- [ ] src/components/admin/DataTable.tsx
-- [ ] src/components/admin/CrudModal.tsx
-- [ ] src/hooks/useAdminQuery.ts (SWR/mutate)
+### Step 4: Create SQL seed file with all domains and resources
+- [ ] Create comprehensive seed_domains_skills_resources.sql
+- [ ] Include all 12 domains from task data
+- [ ] Include all unique skills extracted from the learning resources
+- [ ] Include all 39 learning resources
 
-## Step 6: Testing & Polish [PENDING]
-- [ ] Seed admin user
-- [ ] Test all CRUD/real-time
-- [ ] Responsive/charts/notifications
-- [ ] attempt_completion
+### Step 5: Test
+- [ ] Run SQL seed to populate database
+- [ ] Test admin panel CRUD operations
 
-**Current Progress: Starting Step 1**
-
+## Status: Starting Implementation

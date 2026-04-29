@@ -15,8 +15,8 @@ interface Resource {
   type: string;
   difficulty: string;
   duration: string;
-  skill_ids?: string[];
-  domain_id?: string;
+  skills_covered?: string[];
+  domain?: string;
   created_at: string;
 }
 
@@ -48,8 +48,8 @@ export function ResourceManagement() {
     type: 'Course',
     difficulty: 'Beginner',
     duration: '',
-    domain_id: '',
-    skill_ids: [] as string[]
+    domain: '',
+    skills_covered: [] as string[]
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -126,8 +126,14 @@ export function ResourceManagement() {
     try {
       setLoading(true);
       const dataToSave = {
-        ...formData,
-        skill_ids: formData.skill_ids.length > 0 ? formData.skill_ids : null
+        title: formData.title,
+        description: formData.description,
+        url: formData.url,
+        type: formData.type,
+        difficulty: formData.difficulty,
+        duration: formData.duration,
+        domain: formData.domain || 'Full Stack',
+        skills_covered: formData.skills_covered.length > 0 ? formData.skills_covered : []
       };
 
       if (editingId) {
@@ -177,8 +183,8 @@ export function ResourceManagement() {
       type: 'Course',
       difficulty: 'Beginner',
       duration: '',
-      domain_id: '',
-      skill_ids: []
+      domain: '',
+      skills_covered: []
     });
     setErrors({});
     setEditingId(null);
@@ -192,8 +198,8 @@ export function ResourceManagement() {
       type: resource.type,
       difficulty: resource.difficulty,
       duration: resource.duration,
-      domain_id: resource.domain_id || '',
-      skill_ids: resource.skill_ids || []
+      domain: resource.domain || '',
+      skills_covered: resource.skills_covered || []
     });
     setEditingId(resource.id);
     setIsModalOpen(true);
@@ -268,6 +274,11 @@ export function ResourceManagement() {
                 <ExternalLink className="w-3 h-3" />
               </a>
             )
+          },
+          {
+            header: 'Domain',
+            key: 'domain',
+            render: (value) => value || 'N/A'
           }
         ]}
         actions={(resource) => (
@@ -344,6 +355,13 @@ export function ResourceManagement() {
           onChange={(value) => setFormData({ ...formData, difficulty: value })}
           options={difficultyLevels}
           required
+        />
+        <AdminSelect
+          label="Domain"
+          value={formData.domain}
+          onChange={(value) => setFormData({ ...formData, domain: value })}
+          options={domains.map((d) => ({ value: d.name, label: d.name }))}
+          placeholder="Select a domain"
         />
         <AdminInput
           label="Estimated Duration"

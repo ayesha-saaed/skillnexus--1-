@@ -239,13 +239,7 @@ export function DomainManagement() {
           error={errors.description}
           required
         />
-        <AdminInput
-          label="Icon (emoji or icon name)"
-          value={formData.icon}
-          onChange={(value) => setFormData({ ...formData, icon: value })}
-          placeholder="e.g., 🚀 or rocket"
-        />
-        <div className="space-y-2">
+<div className="space-y-2">
           <label className="block text-sm font-medium text-zinc-300">Color</label>
           <div className="flex gap-2">
             <input
@@ -263,13 +257,6 @@ export function DomainManagement() {
             />
           </div>
         </div>
-        <AdminInput
-          label="Image URL"
-          type="url"
-          value={formData.image_url}
-          onChange={(value) => setFormData({ ...formData, image_url: value })}
-          placeholder="https://example.com/image.png"
-        />
       </AdminModal>
 
       <AdminModal
