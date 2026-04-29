@@ -11,8 +11,31 @@ export function Register({ onNavigate }: RegisterProps) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [nameError, setNameError] = useState('');
+  const [emailError, setEmailError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+
+  const validateName = (value: string) => {
+    if (value.length < 2) return 'Name must be at least 2 characters';
+    return '';
+  };
+
+  const validateEmail = (value: string) => {
+    if (!value) return 'Email is required';
+    if (!emailRegex.test(value)) return 'Please enter a valid email address';
+    return '';
+  };
+
+  const validatePassword = (value: string) => {
+    if (!value) return 'Password is required';
+    if (!passwordRegex.test(value)) return 'Password must be 8+ chars with uppercase, lowercase, number, and special char (@$!%*?&)';
+    return '';
+  };
 
   const handleSocialLogin = async (providerName: 'google') => {
     setLoading(true);
@@ -32,6 +55,19 @@ export function Register({ onNavigate }: RegisterProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const nameErr = validateName(name);
+    setNameError(nameErr);
+    const emailErr = validateEmail(email);
+    setEmailError(emailErr);
+    const pwErr = validatePassword(password);
+    setPasswordError(pwErr);
+
+    if (nameErr || emailErr || pwErr) {
+      setError('Please fix the errors below');
+      return;
+    }
+
     setLoading(true);
     setError('');
     try {
@@ -108,11 +144,18 @@ export function Register({ onNavigate }: RegisterProps) {
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
+                  onBlur={(e) => setNameError(validateName(e.target.value))}
                   required
                   placeholder="Enter your name"
-                  className="w-full pl-11 pr-4 py-3.5 bg-black/40 border border-white/10 rounded-xl text-sm text-white focus:border-blue-500 outline-none transition-all placeholder:text-zinc-500"
+                  className={`w-full pl-11 pr-4 py-3.5 bg-black/40 border rounded-xl text-sm text-white focus:border-blue-500 outline-none transition-all placeholder:text-zinc-500 ${nameError ? 'border-rose-500' : 'border-white/10'}`}
                 />
               </div>
+              {nameError && (
+                <div className="flex items-center gap-3 text-rose-400 text-[11px] bg-rose-500/5 p-2 rounded-xl border border-rose-500/10 font-medium mt-1">
+                  <AlertCircle className="w-3 h-3 shrink-0" />
+                  {nameError}
+                </div>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -123,11 +166,18 @@ export function Register({ onNavigate }: RegisterProps) {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  onBlur={(e) => setEmailError(validateEmail(e.target.value))}
                   required
                   placeholder="your@email.com"
-                  className="w-full pl-11 pr-4 py-3.5 bg-black/40 border border-white/10 rounded-xl text-sm text-white focus:border-blue-500 outline-none transition-all placeholder:text-zinc-500"
+                  className={`w-full pl-11 pr-4 py-3.5 bg-black/40 border rounded-xl text-sm text-white focus:border-blue-500 outline-none transition-all placeholder:text-zinc-500 ${emailError ? 'border-rose-500' : 'border-white/10'}`}
                 />
               </div>
+              {emailError && (
+                <div className="flex items-center gap-3 text-rose-400 text-[11px] bg-rose-500/5 p-2 rounded-xl border border-rose-500/10 font-medium mt-1">
+                  <AlertCircle className="w-3 h-3 shrink-0" />
+                  {emailError}
+                </div>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -138,11 +188,18 @@ export function Register({ onNavigate }: RegisterProps) {
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  onBlur={(e) => setPasswordError(validatePassword(e.target.value))}
                   required
                   placeholder="Create a password"
-                  className="w-full pl-11 pr-4 py-3.5 bg-black/40 border border-white/10 rounded-xl text-sm text-white focus:border-blue-500 outline-none transition-all placeholder:text-zinc-500"
+                  className={`w-full pl-11 pr-4 py-3.5 bg-black/40 border rounded-xl text-sm text-white focus:border-blue-500 outline-none transition-all placeholder:text-zinc-500 ${passwordError ? 'border-rose-500' : 'border-white/10'}`}
                 />
               </div>
+              {passwordError && (
+                <div className="flex items-center gap-3 text-rose-400 text-[11px] bg-rose-500/5 p-2 rounded-xl border border-rose-500/10 font-medium mt-1">
+                  <AlertCircle className="w-3 h-3 shrink-0" />
+                  {passwordError}
+                </div>
+              )}
             </div>
 
             {error && (

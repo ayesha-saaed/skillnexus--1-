@@ -236,7 +236,7 @@ export function AddSkill({ onNavigate, user }: AddSkillProps) {
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={() => onNavigate('skill-analysis')}
+onClick={() => onNavigate('analysis')}
               className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600/90 hover:bg-blue-600 px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-white"
             >
               <BarChart3 className="w-3.5 h-3.5" />

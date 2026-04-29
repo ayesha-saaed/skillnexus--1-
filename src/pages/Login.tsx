@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { supabase } from '../lib/firebase';
-import { motion } from 'motion/react';
+import { supabase } from '../lib/supabase';
+import { motion } from 'framer-motion';
 import { Mail, Lock, AlertCircle, Chrome } from 'lucide-react';
 
 interface LoginProps {
@@ -10,8 +10,25 @@ interface LoginProps {
 export function Login({ onNavigate }: LoginProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [emailError, setEmailError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+
+  const validateEmail = (value: string) => {
+    if (!value) return 'Email is required';
+    if (!emailRegex.test(value)) return 'Please enter a valid email address';
+    return '';
+  };
+
+  const validatePassword = (value: string) => {
+    if (!value) return 'Password is required';
+    if (!passwordRegex.test(value)) return 'Password must be 8+ chars with uppercase, lowercase, number, and special char (@$!%*?&)';
+    return '';
+  };
 
   // ✅ Google Login
   const handleGoogleLogin = async () => {
@@ -36,12 +53,24 @@ export function Login({ onNavigate }: LoginProps) {
   // ✅ Email Login
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const emailErr = validateEmail(email);
+    setEmailError(emailErr);
+    const pwErr = validatePassword(password);
+    setPasswordError(pwErr);
+
+    if (emailErr || pwErr) {
+      setError('Please fix the errors below');
+      return;
+    }
+
     setLoading(true);
     setError('');
 
     try {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
+      onNavigate('dashboard');
     } catch (err: any) {
       setError(err.message || 'Login failed');
     } finally {
@@ -97,11 +126,18 @@ export function Login({ onNavigate }: LoginProps) {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              onBlur={(e) => setEmailError(validateEmail(e.target.value))}
               required
               placeholder="Email"
-              className="w-full pl-11 pr-4 py-3 bg-black/40 border border-white/10 rounded-xl text-white text-sm focus:border-blue-500 outline-none"
+              className={`w-full pl-11 pr-4 py-3 bg-black/40 border rounded-xl text-white text-sm focus:border-blue-500 outline-none ${emailError ? 'border-rose-500' : 'border-white/10'}`}
             />
           </div>
+          {emailError && (
+            <div className="flex items-center gap-3 text-rose-400 text-[11px] bg-rose-500/5 p-2 rounded-xl border border-rose-500/10 font-medium mt-1">
+              <AlertCircle className="w-3 h-3 shrink-0" />
+              {emailError}
+            </div>
+          )}
 
           {/* Password */}
           <div className="relative">
@@ -110,11 +146,18 @@ export function Login({ onNavigate }: LoginProps) {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              onBlur={(e) => setPasswordError(validatePassword(e.target.value))}
               required
               placeholder="Password"
-              className="w-full pl-11 pr-4 py-3 bg-black/40 border border-white/10 rounded-xl text-white text-sm focus:border-blue-500 outline-none"
+              className={`w-full pl-11 pr-4 py-3 bg-black/40 border rounded-xl text-white text-sm focus:border-blue-500 outline-none ${passwordError ? 'border-rose-500' : 'border-white/10'}`}
             />
           </div>
+          {passwordError && (
+            <div className="flex items-center gap-3 text-rose-400 text-[11px] bg-rose-500/5 p-2 rounded-xl border border-rose-500/10 font-medium mt-1">
+              <AlertCircle className="w-3 h-3 shrink-0" />
+              {passwordError}
+            </div>
+          )}
 
           {/* Error */}
           {error && (
@@ -132,20 +175,22 @@ export function Login({ onNavigate }: LoginProps) {
           >
             {loading ? 'Logging in...' : 'Sign In'}
           </button>
+
+          {/* Register */}
+          <div className="mt-8 text-center">
+            <p className="text-xs text-zinc-500 mb-2">
+              Don't have an account?
+            </p>
+            <button
+              type="button"
+              onClick={() => onNavigate('register')}
+              className="text-xs text-blue-500 font-bold uppercase tracking-widest hover:text-white"
+            >
+              Create Account
+            </button>
+          </div>
         </form>
 
-        {/* Register */}
-        <div className="mt-8 text-center">
-          <p className="text-xs text-zinc-500 mb-2">
-            Don't have an account?
-          </p>
-          <button
-            onClick={() => onNavigate('register')}
-            className="text-xs text-blue-500 font-bold uppercase tracking-widest hover:text-white"
-          >
-            Create Account
-          </button>
-        </div>
       </motion.div>
     </div>
   );

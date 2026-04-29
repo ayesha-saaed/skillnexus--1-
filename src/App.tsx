@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+ import React, { useState, useEffect } from 'react';
 import { onAuthStateChanged, User, supabase } from './lib/firebase';
 import { Layout } from './components/Layout';
 import { Login } from './pages/Login';
@@ -22,29 +22,26 @@ export default function App() {
       try {
         setUser(u);
         if (u) {
-          let role = 'student';
           const isAdminEmail = u.email === 'saeedayesha995@gmail.com';
-          const { data: existing } = await supabase.from('profiles').select('*').eq('id', u.id).maybeSingle();
+          const profileData = {
+            id: u.id,
+            name: u.user_metadata?.full_name || u.email?.split('@')[0] || 'New User',
+            email: u.email,
+            role: isAdminEmail ? 'admin' : 'student',
+            points: 0,
+            level: 1,
+            badges: [],
+            updated_at: new Date().toISOString()
+          };
 
-          if (!existing) {
-            role = isAdminEmail ? 'admin' : 'student';
-            await supabase.from('profiles').insert({
-              id: u.id,
-              name: u.user_metadata?.full_name || u.email?.split('@')[0] || 'New User',
-              email: u.email,
-              role,
-              points: 0,
-              level: 1,
-              badges: [],
-              created_at: new Date().toISOString()
-            });
-          } else {
-            role = existing.role || 'student';
-            if (isAdminEmail && role !== 'admin') {
-              role = 'admin';
-              await supabase.from('profiles').update({ role: 'admin' }).eq('id', u.id);
-            }
-          }
+          const { error } = await supabase
+            .from('profiles')
+            .upsert(profileData, { onConflict: 'id' });
+
+          if (error) console.warn('Profile upsert:', error.message);
+
+          const { data: profile } = await supabase.from('profiles').select('role').eq('id', u.id).single();
+          const role = profile?.role || 'student';
           setUserRole(role);
           setCurrentPage('dashboard');
         } else {
