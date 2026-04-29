@@ -1,0 +1,18 @@
+{
+  "files.associations": {
+    "*.sql": "postgres"
+  },
+  "[postgres]": {
+    "editor.defaultFormatter": null,
+    "editor.codeActionsOnSave": []
+  },
+  "[sql]": {
+    "editor.defaultFormatter": null,
+    "editor.codeActionsOnSave": []
+  },
+  "sql.linting.enabled": false,
+  "sqltools.useNodeRuntime": true,
+  "[sqlpgsql]": {
+    "editor.defaultFormatter": null
+  }
+}

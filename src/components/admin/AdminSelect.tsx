@@ -1,0 +1,42 @@
+import React from 'react';
+
+interface AdminSelectProps {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: { value: string; label: string }[];
+  placeholder?: string;
+  error?: string;
+  required?: boolean;
+}
+
+export function AdminSelect({
+  label,
+  value,
+  onChange,
+  options,
+  placeholder,
+  error,
+  required
+}: AdminSelectProps) {
+  return (
+    <div className="space-y-2">
+      <label className="block text-sm font-medium text-zinc-300">
+        {label} {required && <span className="text-red-400">*</span>}
+      </label>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-colors"
+      >
+        {placeholder && <option value="">{placeholder}</option>}
+        {options.map((opt) => (
+          <option key={opt.value} value={opt.value}>
+            {opt.label}
+          </option>
+        ))}
+      </select>
+      {error && <p className="text-xs text-red-400">{error}</p>}
+    </div>
+  );
+}

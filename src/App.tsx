@@ -9,6 +9,7 @@ import { IndustryTrends } from './pages/IndustryTrends';
 import { AddSkill } from './pages/AddSkill';
 import { Library } from './pages/Library';
 import { Admin } from './pages/Admin';
+import { AdminDashboard } from './components/admin/AdminDashboard';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function App() {
@@ -74,11 +75,11 @@ export default function App() {
       case 'login': return <Login onNavigate={setCurrentPage} />;
       case 'register': return <Register onNavigate={setCurrentPage} />;
       case 'dashboard': return <Dashboard user={user!} onNavigate={setCurrentPage} />;
-case 'analysis': return <SkillAnalysis user={user!} onNavigate={setCurrentPage} />;
+      case 'analysis': return <SkillAnalysis user={user!} onNavigate={setCurrentPage} />;
       case 'trends': return <IndustryTrends onNavigate={setCurrentPage} />;
       case 'add-skill': return <AddSkill onNavigate={setCurrentPage} user={user!} />;
       case 'library': return <Library onNavigate={setCurrentPage} />;
-      case 'admin': return <Admin onNavigate={setCurrentPage} />;
+      case 'admin': return <AdminDashboard onNavigate={setCurrentPage} />;
       default: return <Login onNavigate={setCurrentPage} />;
     }
   };
@@ -86,7 +87,7 @@ case 'analysis': return <SkillAnalysis user={user!} onNavigate={setCurrentPage} 
   return (
     <div className="min-h-screen bg-zinc-50 font-sans text-zinc-900 overflow-x-hidden">
       <AnimatePresence mode="wait">
-        {user && currentPage !== 'login' && currentPage !== 'register' ? (
+        {user && currentPage !== 'login' && currentPage !== 'register' && currentPage !== 'admin' ? (
           <Layout user={user} userRole={userRole} onNavigate={setCurrentPage} currentPage={currentPage}>
             <motion.div
               key={currentPage}

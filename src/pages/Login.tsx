@@ -79,15 +79,15 @@ export function Login({ onNavigate }: LoginProps) {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[var(--color-bg-main)] p-4 relative overflow-hidden">
+    <div className="min-h-screen flex items-center justify-center bg-bg-main p-4 relative overflow-hidden">
 
       {/* Background Glow */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-blue-600/5 rounded-full blur-[120px] pointer-events-none"></div>
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-150 h-150 bg-blue-600/5 rounded-full blur-[120px] pointer-events-none"></div>
 
       <motion.div
         initial={{ opacity: 0, scale: 0.98, y: 10 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
-        className="max-w-md w-full bg-[var(--color-bg-card)]/80 backdrop-blur-xl p-6 sm:p-10 rounded-2xl relative z-10"
+        className="max-w-md w-full bg-bg-card/80 backdrop-blur-xl p-6 sm:p-10 rounded-2xl relative z-10"
       >
         {/* Header */}
         <div className="text-center mb-10">

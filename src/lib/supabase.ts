@@ -12,4 +12,10 @@ console.warn('⚠️ Supabase using dev mode - update .env for production');
 
 export const supabase = createClient(supabaseUrl, supabaseKey);
 
+export async function getCurrentUser() {
+  const { data: { user }, error } = await supabase.auth.getUser();
+  if (error) throw error;
+  return user;
+}
+
 

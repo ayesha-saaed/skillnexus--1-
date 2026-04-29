@@ -1,15 +1,43 @@
-# Validation Regex Implementation TODO
+# Admin Dashboard Implementation Plan
+Approved by user. Breaking down into logical steps. Will update progress.
 
-## Steps:
-- [x] Step 1: Create TODO.md (current)
-- [x] Step 2: Update src/pages/Register.tsx with validation logic, states, functions, input handlers, error displays, and form validation
-- [x] Step 3: Update src/pages/Login.tsx similarly
-- [x] Step 4: Test forms and mark complete
-- [ ] Step 5: attempt_completion
+## Step 1: Database Schema Updates [WAITING USER ACTION]
+- [x] Create `skills` table (domain_id FK)
+- [x] Update `resources` (add skill_ids[])
+- [x] Add admin RLS policies (full CRUD)
+- [x] Seed initial domains/skills from knowledge_base.ts
+- [x] Create `add_admin_schema.sql` **(USER: Run in Supabase SQL Editor!)**
 
-## Plan Summary:
-- Add email regex: `/^[^\s@]+@[^\s@]+\.[^\s@]+$/`
-- Strong password regex: `/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/`
-- Client-side validation on blur/change/submit
-- Error displays under inputs (rose theme)
-- Prevent submit if invalid
+
+## Step 2: Install Dependencies [PENDING]
+- [ ] shadcn: table, dialog, form, toast, card, badge, button
+- [ ] recharts, lucide-react (if missing)
+- [ ] zod, @hookform/resolvers
+
+## Step 3: Admin Auth & Layout [PENDING]
+- [ ] src/lib/useAdmin.ts hook
+- [ ] src/pages/AdminLogin.tsx
+- [ ] src/components/AdminLayout.tsx (sidebar)
+- [ ] Update App.tsx routes/protection
+
+## Step 4: Admin Pages [PENDING]
+- [ ] src/pages/admin/Overview.tsx (stats/charts)
+- [ ] src/pages/admin/Domains.tsx (CRUD)
+- [ ] src/pages/admin/Skills.tsx (CRUD, domain select)
+- [ ] src/pages/admin/Resources.tsx (full form, filters)
+- [ ] src/pages/admin/Users.tsx (mgmt)
+- [ ] Refactor existing Admin.tsx
+
+## Step 5: Components & Utils [PENDING]
+- [ ] src/components/admin/DataTable.tsx
+- [ ] src/components/admin/CrudModal.tsx
+- [ ] src/hooks/useAdminQuery.ts (SWR/mutate)
+
+## Step 6: Testing & Polish [PENDING]
+- [ ] Seed admin user
+- [ ] Test all CRUD/real-time
+- [ ] Responsive/charts/notifications
+- [ ] attempt_completion
+
+**Current Progress: Starting Step 1**
+

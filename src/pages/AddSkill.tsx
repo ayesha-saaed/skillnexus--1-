@@ -165,7 +165,7 @@ export function AddSkill({ onNavigate, user }: AddSkillProps) {
         <p className="text-[11px] text-zinc-500 uppercase tracking-widest mt-1">Add and manage the skills you already have</p>
       </div>
 
-      <div className="theme-card bg-[var(--color-bg-card)]/50">
+      <div className="theme-card bg-bg-card/50">
         <h2 className="text-sm font-bold text-white uppercase tracking-widest mb-6 px-1">Add a New Skill</h2>
         {errorMessage && (
           <p className="mb-4 px-1 text-xs text-rose-400">{errorMessage}</p>
@@ -254,15 +254,15 @@ onClick={() => onNavigate('analysis')}
         </div>
       </div>
 
-      <div className="theme-card !p-0 overflow-hidden">
-        <div className="px-4 sm:px-8 py-6 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
+      <div className="theme-card p-0! overflow-hidden">
+        <div className="px-4 sm:px-8 py-6 border-b border-white/5 flex items-center justify-between bg-white/2">
           <h2 className="text-sm font-bold text-white uppercase tracking-widest">Skill List</h2>
           <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest bg-white/5 px-2 py-1 rounded border border-white/5">{skills.length} Skills</span>
         </div>
         <div className="divide-y divide-white/5">
           {skills.length > 0 ? (
             skills.map((skill) => (
-              <div key={skill.id} className="px-4 sm:px-8 py-5 flex items-center justify-between hover:bg-white/[0.02] transition-colors group">
+              <div key={skill.id} className="px-4 sm:px-8 py-5 flex items-center justify-between hover:bg-white/2 transition-colors group">
                 <div className="flex items-center gap-4">
                   <div className="w-10 h-10 rounded-lg bg-white/5 flex items-center justify-center text-zinc-400 group-hover:text-blue-400 transition-colors">
                     <Award className="w-5 h-5" />
@@ -297,7 +297,7 @@ onClick={() => onNavigate('analysis')}
         </div>
       </div>
 
-      <div className="theme-card border-amber-500/15 bg-amber-500/[0.04]">
+      <div className="theme-card border-amber-500/15 bg-amber-500/4">
         <div className="flex items-center gap-2 mb-4">
           <TrendingUp className="w-4 h-4 text-amber-400" />
           <h2 className="text-sm font-bold text-white uppercase tracking-widest">What to do next</h2>
