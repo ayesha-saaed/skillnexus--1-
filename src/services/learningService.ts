@@ -1,4 +1,5 @@
-import { supabase } from '../lib/firebase';
+import { supabase } from '../lib/supabase';
+
 
 export interface Progress {
   user_id: string;
@@ -27,7 +28,7 @@ export const learningService = {
       resource_id: resourceId,
       status: updates.status || 'In Progress',
       progress: updates.progress || 0,
-      time_spent: updates.timeSpent || 0,
+      time_spent: updates.time_spent || 0,
       last_updated: new Date().toISOString()
     };
 
@@ -47,7 +48,7 @@ export const learningService = {
       ...row,
       userId: row.user_id,
       resourceId: row.resource_id,
-      timeSpent: row.time_spent,
+      time_spent: row.time_spent,
       lastUpdated: row.last_updated
     }));
   },

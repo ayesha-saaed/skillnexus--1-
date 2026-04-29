@@ -1,4 +1,5 @@
-import { supabase } from '../lib/firebase';
+import { supabase } from '../lib/supabase';
+
 
 export interface Badge {
   id: string;

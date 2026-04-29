@@ -1,593 +1,520 @@
-import React, { useState, useEffect } from 'react';
-import { supabase, getCurrentUser } from '../lib/firebase';
-import { motion } from 'motion/react';
-import {
-  Radar,
-  RadarChart,
-  PolarGrid,
-  PolarAngleAxis,
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Cell
-} from 'recharts';
-import {
-  BarChart3,
-  Target,
-  Zap,
-  TrendingUp,
-  AlertTriangle,
-  CheckCircle,
-  ArrowRight,
-  Sparkles,
-  Layers,
-  Search,
-  Lightbulb,
-  ShieldCheck,
-  Code2,
-  Loader2
-} from 'lucide-react';
-import { cn } from '../lib/utils';
-import { persistActivePath } from '../lib/activePath';
+import React, { useState, useEffect, useRef } from 'react';
+import { supabase } from '../lib/supabase';
+import { getCurrentUser } from '../lib/firebase';
+import { Target, CheckCircle, AlertCircle, ArrowRight, BookOpen, Search, X, BarChart3 } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+
+// ── Types ──────────────────────────────────────────────────────────────────────
+
+interface Domain {
+  id: string;
+  name: string;
+  languages: string[];
+  frameworks: string[];
+  libraries: string[];
+  tools: string[];
+}
+
+interface GapResult {
+  jobRole: string;
+  matchedSkills: string[];
+  missingSkills: string[];
+  weakSkills: string[];
+  nextSteps: string[];
+}
 
 interface SkillAnalysisProps {
+  user?: any;
   onNavigate: (page: any) => void;
 }
 
-interface UserSkill {
-  id?: string;
-  skillName: string;
-  proficiency: 'Beginner' | 'Intermediate' | 'Advanced';
-}
+// ── Helpers ────────────────────────────────────────────────────────────────────
 
-interface JobRole {
-  id?: string;
-  roleName: string;
-  requiredSkills: (string | { name: string })[];
-  difficulty: string;
-  domain: string;
-}
-
-function roleRequiredSkillNames(skills: (string | { name: string })[] | undefined): string[] {
-  return (skills || []).map((s) => (typeof s === 'string' ? s : s?.name)).filter(Boolean) as string[];
-}
-
-const proficiencyMap: Record<string, number> = {
-  Beginner: 30,
-  Intermediate: 70,
-  Advanced: 100,
-};
-
-const COLORS = ['#3b82f6', '#8b5cf6', '#ec4899', '#f97316', '#10b981', '#06b6d4', '#f43f5e', '#84cc16'];
-
-export function SkillAnalysis({ onNavigate }: SkillAnalysisProps) {
-  const [skills, setSkills] = useState<UserSkill[]>([]);
-  const [roles, setRoles] = useState<JobRole[]>([]);
-  const [selectedRole, setSelectedRole] = useState<JobRole | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [analyzing, setAnalyzing] = useState(false);
-  const [analysis, setAnalysis] = useState<any>(null);
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const [careerSummary, setCareerSummary] = useState('');
-  const [analysisRequested, setAnalysisRequested] = useState(false);
-
-  const openRoleResources = () => {
-    if (!selectedRole) return;
-    const roleSkills = roleRequiredSkillNames(selectedRole.requiredSkills);
-    const missing = (analysis?.missingSkills || []).filter((s: string) => !!s);
-    localStorage.setItem('library.preferredDomain', selectedRole.domain || 'All');
-    localStorage.setItem('library.preferredRole', selectedRole.roleName || '');
-    localStorage.setItem('library.preferredMissingSkills', JSON.stringify(missing));
-    localStorage.setItem('library.preferredRoleSkills', JSON.stringify(roleSkills));
-    onNavigate('library');
+function parseDomainSkills(domain: any): string[] {
+  const parse = (val: any): string[] => {
+    if (!val) return [];
+    try { return Array.isArray(val) ? val : JSON.parse(val); }
+    catch { return []; }
   };
+  return [
+    ...parse(domain.languages),
+    ...parse(domain.frameworks),
+    ...parse(domain.libraries),
+    ...parse(domain.tools),
+  ];
+}
 
+// ── Component ─────────────────────────────────────────────────────────────────
+
+export function SkillAnalysis({ user, onNavigate }: SkillAnalysisProps): JSX.Element {
+  const [domains, setDomains] = useState<Domain[]>([]);
+  const [userSkills, setUserSkills] = useState<string[]>([]);
+  const [selectedDomainId, setSelectedDomainId] = useState('');
+  const [searchInput, setSearchInput] = useState('');
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [result, setResult] = useState<GapResult | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [fetchingData, setFetchingData] = useState(true);
+  const [error, setError] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+  const suggestionsRef = useRef<HTMLDivElement>(null);
+
+  // ── All CS / IT domains ──────────────────────────────────────────────────────
+  // These are upserted on first load so the DB is always up to date.
+  const ALL_DOMAINS = [
+    { id: '0a5c14cc-62c9-4770-bbbc-f550a101b6bc', name: 'Frontend Development', languages: ["HTML","CSS","JavaScript","TypeScript"], frameworks: ["React","Next.js","Angular","Vue.js"], libraries: ["Redux","Axios","Framer Motion","Chart.js"], tools: ["Webpack","Vite","Babel"] },
+
+{ id: '55d13850-80f0-4cea-a610-98fbae22f857', name: 'Backend Development', languages: ["JavaScript","Python","Java","Go"], frameworks: ["Node.js","Express.js","Django","Spring Boot"], libraries: ["JWT","Mongoose","Sequelize"], tools: ["Postman","Swagger"] },
+{ id: '44bed9a8-adac-42b9-be44-6a11bd0690d4', name: 'Full Stack Development', languages: ["JavaScript","TypeScript"], frameworks: ["Next.js","MERN","MEAN"], libraries: ["Redux","Axios"], tools: ["Docker","Git"] },
+    { id: '1d0b2ff5-ffc7-4f05-b9a9-137d6564f773', name: 'Data Science', languages: ["Python","R","SQL"], frameworks: ["Pandas","NumPy"], libraries: ["Matplotlib","Seaborn","Plotly"], tools: ["Jupyter","Excel"] },
+
+    { id: 'c7d55e13-c853-4d39-93b2-92a782a08e0d', name: 'AI / Machine Learning', languages: ["Python"], frameworks: ["TensorFlow","PyTorch"], libraries: ["Scikit-learn","NLTK","OpenCV"], tools: ["Colab","Jupyter"] },
+    { id: '43eae6ec-4c3c-42f5-bdba-08c9e3def655', name: 'DevOps', languages: ["Bash","Python"], frameworks: [], libraries: [], tools: ["Docker","Kubernetes","Jenkins","GitHub Actions"] },
+
+    { id: '9a6c7407-04c9-4c41-a1c9-c3e6e6ea6ffd', name: 'Cloud Computing', languages: ["Python","JavaScript"], frameworks: [], libraries: [], tools: ["AWS","Azure","GCP"] },
+    { id: '861cd405-4190-4d79-bb58-700aad4da607', name: 'Cybersecurity', languages: ["Python","C","JavaScript"], frameworks: [], libraries: ["CryptoJS"], tools: ["Wireshark","Nmap","Metasploit"] },
+    { id: 'db442a03-01b2-41e3-afc0-e5cecc72b857', name: 'Mobile Development', languages: ["Dart","Java","Kotlin","Swift"], frameworks: ["Flutter","React Native"], libraries: [], tools: ["Android Studio","Xcode"] },
+    { id: '65222713-3291-45dd-8ead-8bb96068a1ac', name: 'UI/UX Design', languages: [], frameworks: [], libraries: [], tools: ["Figma","Adobe XD","Sketch"] },
+    { id: '00000000-0000-0000-0000-000000000011', name: 'Game Development',
+      languages: ['C++','C#','Python','Lua','GDScript','Rust'],
+      frameworks: ['Unity','Unreal Engine','Godot','Pygame','MonoGame'],
+      libraries: ['PhysX','Box2D','FMOD','OpenAL'],
+      tools: ['Blender','Maya','Photoshop','Aseprite','Visual Studio','Steam SDK'] },
+    { id: '00000000-0000-0000-0000-000000000012', name: 'Blockchain & Web3',
+      languages: ['Solidity','Rust','Go','JavaScript','TypeScript'],
+      frameworks: ['Hardhat','Foundry','Truffle','Anchor'],
+      libraries: ['Ethers.js','Web3.js','OpenZeppelin','Wagmi','IPFS'],
+      tools: ['MetaMask','Remix IDE','Infura','Alchemy','Chainlink','Tenderly'] },
+    { id: '00000000-0000-0000-0000-000000000013', name: 'Database Engineering',
+      languages: ['SQL','PL/pgSQL','Python','Java'],
+      frameworks: ['PostgreSQL','MySQL','SQLite','Microsoft SQL Server','Oracle DB'],
+      libraries: ['MongoDB','Redis','Cassandra','DynamoDB','Elasticsearch','Neo4j','InfluxDB'],
+      tools: ['DBeaver','pgAdmin','DataGrip','MongoDB Compass','dbt','Airflow','Snowflake','BigQuery'] },
+    { id: '00000000-0000-0000-0000-000000000014', name: 'Embedded Systems & IoT',
+      languages: ['C','C++','Rust','Python','Assembly','MicroPython'],
+      frameworks: ['FreeRTOS','Zephyr RTOS','Arduino','ESP-IDF','Mbed OS'],
+      libraries: ['LVGL','TinyML','OpenCV (Lite)','MQTT'],
+      tools: ['STM32CubeIDE','Arduino IDE','PlatformIO','KiCad','Proteus','AWS IoT','Azure IoT Hub'] },
+    { id: '00000000-0000-0000-0000-000000000015', name: 'Computer Networks & IT Infrastructure',
+      languages: ['Python','Bash','Go'],
+      frameworks: ['Cisco IOS','OpenWRT','pfSense','GNS3'],
+      libraries: ['Scapy','Netmiko','Nornir','Paramiko'],
+      tools: ['Wireshark','Cisco Packet Tracer','GNS3','PRTG','Nagios','Zabbix','VMware','Active Directory'] },
+    { id: '00000000-0000-0000-0000-000000000016', name: 'Software Testing & QA',
+      languages: ['Python','Java','JavaScript','TypeScript','C#'],
+      frameworks: ['Selenium','Playwright','Cypress','Appium','Robot Framework','pytest','Jest'],
+      libraries: ['Faker','Locust','k6','Allure'],
+      tools: ['Postman','JMeter','SonarQube','JIRA','TestRail','BrowserStack','Docker'] },
+    { id: '00000000-0000-0000-0000-000000000017', name: 'Computer Vision',
+      languages: ['Python','C++','MATLAB'],
+      frameworks: ['OpenCV','TensorFlow','PyTorch','MediaPipe','YOLO','Detectron2'],
+      libraries: ['NumPy','Pillow','scikit-image','Albumentations','torchvision','ONNX'],
+      tools: ['Jupyter','CUDA','TensorRT','Roboflow','Label Studio','Weights & Biases','CVAT'] },
+    { id: '00000000-0000-0000-0000-000000000018', name: 'Natural Language Processing',
+      languages: ['Python','JavaScript','Java'],
+      frameworks: ['Hugging Face Transformers','SpaCy','NLTK','LangChain','LlamaIndex','Rasa'],
+      libraries: ['sentence-transformers','faiss-cpu','chromadb','pinecone','openai','tiktoken'],
+      tools: ['Jupyter','Weights & Biases','Colab','CUDA','Streamlit','Gradio','Docker'] },
+    { id: '00000000-0000-0000-0000-000000000019', name: 'Data Engineering',
+      languages: ['Python','Scala','Java','SQL','Bash'],
+      frameworks: ['Apache Spark','Apache Kafka','Apache Flink','dbt','Airflow','Prefect'],
+      libraries: ['PySpark','Pandas','SQLAlchemy','Great Expectations','Delta Lake'],
+      tools: ['Hadoop','Databricks','Snowflake','BigQuery','Redshift','Airbyte','Fivetran','Docker'] },
+    { id: '00000000-0000-0000-0000-000000000020', name: 'Site Reliability Engineering',
+      languages: ['Go','Python','Bash','Rust'],
+      frameworks: ['Kubernetes','Terraform','Helm','Ansible','Istio'],
+      libraries: ['Prometheus client','OpenTelemetry','Grafana SDK'],
+      tools: ['Prometheus','Grafana','Datadog','PagerDuty','Jaeger','Loki','ArgoCD','AWS','GCP'] },
+    { id: '00000000-0000-0000-0000-000000000021', name: 'AR / VR Development',
+      languages: ['C#','C++','JavaScript','Swift','Kotlin'],
+      frameworks: ['Unity','Unreal Engine','A-Frame','Three.js','ARCore','ARKit','Vuforia'],
+      libraries: ['OpenXR','WebXR','MRTK'],
+      tools: ['Meta Quest SDK','HoloLens SDK','Blender','Substance Painter','Figma','Rider'] },
+    { id: '00000000-0000-0000-0000-000000000022', name: 'Robotics',
+      languages: ['Python','C++','MATLAB','Rust'],
+      frameworks: ['ROS','ROS 2','Gazebo','MoveIt','Nav2'],
+      libraries: ['NumPy','SciPy','tf2_ros','rclpy','OMPL','Eigen'],
+      tools: ['RViz','Arduino','Raspberry Pi','NVIDIA Jetson','Webots','CoppeliaSim'] },
+    { id: '00000000-0000-0000-0000-000000000023', name: 'Quantum Computing',
+      languages: ['Python','Q#','Julia','C++'],
+      frameworks: ['Qiskit','Cirq','PennyLane','Braket SDK','QuTiP'],
+      libraries: ['NumPy','SciPy','sympy','autograd'],
+      tools: ['IBM Quantum','Google Quantum AI','Amazon Braket','Azure Quantum','Jupyter'] },
+    { id: '00000000-0000-0000-0000-000000000024', name: 'IT Support & System Administration',
+      languages: ['Bash','PowerShell','Python'],
+      frameworks: ['Active Directory','Group Policy','LDAP','Exchange','Intune'],
+      libraries: ['Ansible','Puppet','Chef'],
+      tools: ['Windows Server','Linux','VMware','Hyper-V','ServiceNow','JIRA','Nagios','Zabbix','Splunk','Veeam'] },
+    { id: '00000000-0000-0000-0000-000000000025', name: 'MLOps',
+      languages: ['Python','Bash','Go'],
+      frameworks: ['MLflow','Kubeflow','BentoML','Seldon Core','Ray','Feast'],
+      libraries: ['scikit-learn','PyTorch','ONNX','Great Expectations','Evidently AI'],
+      tools: ['Docker','Kubernetes','Airflow','DVC','Weights & Biases','SageMaker','Vertex AI','GitHub Actions'] },
+    { id: '00000000-0000-0000-0000-000000000026', name: 'Systems Programming',
+      languages: ['C','C++','Rust','Assembly','Go','Zig'],
+      frameworks: ['POSIX','Win32 API','LLVM','GCC','Clang','pthreads'],
+      libraries: ['Boost','Abseil','Intel TBB','libuv','libevent','jemalloc'],
+      tools: ['GDB','LLDB','Valgrind','AddressSanitizer','Perf','CMake','Meson','Ninja'] },
+    { id: '00000000-0000-0000-0000-000000000027', name: 'Business Intelligence & Analytics',
+      languages: ['SQL','Python','R','DAX'],
+      frameworks: ['dbt','Looker LookML','Apache Superset','Metabase'],
+      libraries: ['Pandas','NumPy','Plotly','Seaborn','Altair'],
+      tools: ['Tableau','Power BI','Looker','Google Data Studio','Snowflake','BigQuery','Excel','Fivetran'] },
+    { id: '00000000-0000-0000-0000-000000000028', name: 'API Development & Integration',
+      languages: ['JavaScript','TypeScript','Python','Go','Java'],
+      frameworks: ['Express.js','FastAPI','Django REST Framework','Spring Boot','NestJS','Gin'],
+      libraries: ['Axios','Pydantic','Zod','Yup','OpenAPI','Swagger UI'],
+      tools: ['Postman','Insomnia','Swagger','API Gateway','RabbitMQ','Kafka','Redis','Docker'] },
+    { id: '00000000-0000-0000-0000-000000000029', name: 'Compiler Design & Programming Languages',
+      languages: ['C','C++','Rust','OCaml','Haskell','Python'],
+      frameworks: ['LLVM','ANTLR','Bison','Flex','Cranelift','Tree-sitter'],
+      libraries: ['lalrpop','nom','chumsky','logos'],
+      tools: ['GCC','Clang','Valgrind','GDB','Perf','CMake','Nix','Racket'] },
+    { id: '00000000-0000-0000-0000-000000000030', name: 'Digital Forensics & Incident Response',
+      languages: ['Python','Bash','PowerShell','C','Go'],
+      frameworks: ['Autopsy','Volatility','The Sleuth Kit','YARA'],
+      libraries: ['pefile','scapy','impacket','yara-python'],
+      tools: ['Autopsy','FTK Imager','Wireshark','Splunk','Elastic SIEM','TheHive','MISP','Kali Linux','REMnux'] },
+  ];
+
+  // Load domains and current user skills on mount
   useEffect(() => {
-    async function fetchData() {
-      const user = await getCurrentUser();
-      if (!user) return;
-      setCurrentUserId(user.id);
-      setLoading(true);
+    async function loadData() {
+      setFetchingData(true);
       try {
-        const { data: sessionData } = await supabase.auth.getSession();
-        const token = sessionData.session?.access_token;
-        if (!token) {
-          throw new Error('Not authenticated');
+        // Upsert all domains so DB is always complete
+        await supabase.from('domains').upsert(
+          ALL_DOMAINS.map(d => ({
+            id: d.id,
+            name: d.name,
+            languages: JSON.stringify(d.languages),
+            frameworks: JSON.stringify(d.frameworks),
+            libraries: JSON.stringify(d.libraries),
+            tools: JSON.stringify(d.tools),
+          })),
+          { onConflict: 'id', ignoreDuplicates: false }
+        );
+
+        // Fetch all domains from DB (now guaranteed complete)
+        const { data: domainData, error: domainErr } = await supabase
+          .from('domains')
+          .select('id, name, languages, frameworks, libraries, tools')
+          .order('name');
+        if (domainErr) throw domainErr;
+        setDomains(domainData || []);
+
+        // Fetch user's current skills
+        const currentUser = await getCurrentUser();
+        if (currentUser) {
+          const { data: skillData } = await supabase
+            .from('user_skills')
+            .select('skill_name, proficiency_level')
+            .eq('user_id', currentUser.id);
+          setUserSkills((skillData || []).map((s: any) => s.skill_name));
         }
-        const [skillsRes, rolesResponse] = await Promise.all([
-          supabase.from('user_skills').select('*').eq('user_id', user.id),
-          fetch('/api/job-roles', { headers: { Authorization: `Bearer ${token}` } }),
-        ]);
-        if (skillsRes.error) throw skillsRes.error;
-        if (!rolesResponse.ok) throw new Error(`Failed to load roles: ${rolesResponse.status}`);
-        const rolesJson = await rolesResponse.json();
-
-        const skillsData = (skillsRes.data || []).map((d: any) => ({ id: d.id, skillName: d.skill_name, proficiency: d.proficiency } as UserSkill));
-        const rolesData = (rolesJson || []).map((d: any) => ({
-          id: d.id,
-          roleName: d.role_name,
-          requiredSkills: d.required_skills || [],
-          difficulty: d.difficulty,
-          domain: d.domain
-        } as JobRole));
-
-        setSkills(skillsData);
-        setRoles(rolesData);
-
-        // Auto-select first role
-        if (rolesData.length > 0 && !selectedRole) {
-          setSelectedRole(rolesData[0]);
-        }
-      } catch (err) {
-        console.error('SkillAnalysis fetch error:', err);
+      } catch (e: any) {
+        setError(e.message || 'Failed to load data');
       } finally {
-        setLoading(false);
+        setFetchingData(false);
       }
     }
-    fetchData();
+    loadData();
   }, []);
 
-  useEffect(() => {
-    if (!selectedRole || !currentUserId) return;
-    persistActivePath(
-      {
-        id: selectedRole.id,
-        roleName: selectedRole.roleName,
-        domain: selectedRole.domain || '',
-      },
-      currentUserId
-    );
-  }, [selectedRole?.id, selectedRole?.roleName, selectedRole?.domain, currentUserId]);
+  function handleAnalyze() {
+    if (!selectedDomainId) return;
 
-  useEffect(() => {
-    setAnalysisRequested(false);
-  }, [selectedRole?.id, careerSummary, skills.length]);
+    const domain = domains.find(d => d.id === selectedDomainId);
+    if (!domain) return;
 
-  const runAnalysis = async () => {
-    if (!selectedRole || !currentUserId) return;
-    setAnalyzing(true);
-    try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData.session?.access_token;
-      if (!token) return;
+    setLoading(true);
+    setResult(null);
 
-      const response = await fetch('/api/analyze', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          jobRoleId: selectedRole.id,
-          userSkills: skills.map((s) => ({
-            skillName: s.skillName,
-            proficiency: s.proficiency,
-          })),
-          careerSummary: careerSummary.trim().length >= 10 ? careerSummary.trim() : undefined,
-        }),
-      });
-      if (!response.ok) {
-        throw new Error(`Analysis request failed: ${response.status}`);
+    // Get all skills required for the selected role
+    const requiredSkills = parseDomainSkills(domain);
+
+    const userSkillsLower = userSkills.map(s => s.toLowerCase());
+
+    const matchedSkills: string[] = [];
+    const missingSkills: string[] = [];
+
+    requiredSkills.forEach(skill => {
+      if (userSkillsLower.includes(skill.toLowerCase())) {
+        matchedSkills.push(skill);
+      } else {
+        missingSkills.push(skill);
       }
-      const result = await response.json();
-      const requiredNames = roleRequiredSkillNames(selectedRole.requiredSkills);
-      const gapData = requiredNames.map((skill) => {
-        const userSkill = skills.find((s) => s.skillName.toLowerCase() === skill.toLowerCase());
-        return {
-          skill,
-          userLevel: userSkill ? proficiencyMap[userSkill.proficiency] : 0,
-          requiredLevel: 80,
-          gap: userSkill ? Math.max(0, 80 - proficiencyMap[userSkill.proficiency]) : 80,
-        };
-      });
-      setAnalysis({
-        ...result,
-        gapData,
-        totalRequired: requiredNames.length,
-      });
-      setAnalysisRequested(true);
-    } catch (err) {
-      console.error('Skill analysis API error:', err);
-    } finally {
-      setAnalyzing(false);
-    }
-  };
+    });
 
-  if (loading) {
+    // For now we treat all matched skills as fine; extend with proficiency check if needed
+    const weakSkills: string[] = [];
+
+    // Chart data for graph
+    const chartData = requiredSkills.slice(0, 10).map(skill => ({
+      skill,
+      yourScore: userSkillsLower.includes(skill.toLowerCase()) ? 1 : 0,
+      required: 1,
+      status: userSkillsLower.includes(skill.toLowerCase()) ? 'matched' : 'missing'
+    }));
+
+    // Build simple next steps
+    const nextSteps: string[] = [];
+    if (missingSkills.length === 0 && weakSkills.length === 0) {
+      nextSteps.push('Great job! You have all the core skills for this role.');
+      nextSteps.push('Consider building projects to strengthen your portfolio.');
+      nextSteps.push('Look into advanced topics and specialisations in this domain.');
+    } else {
+      if (missingSkills.length > 0) {
+        nextSteps.push(`Start learning the missing skills: focus on ${missingSkills.slice(0, 3).join(', ')} first.`);
+      }
+      if (weakSkills.length > 0) {
+        nextSteps.push(`Improve your proficiency in: ${weakSkills.slice(0, 3).join(', ')}.`);
+      }
+      nextSteps.push('Head to the Resource Library to find courses and tutorials for these skills.');
+      nextSteps.push('Build small projects to apply what you learn — hands-on practice is key.');
+    }
+
+    setResult({
+      jobRole: domain.name,
+      matchedSkills,
+      missingSkills,
+      weakSkills,
+      nextSteps,
+      chartData
+    });
+
+    setLoading(false);
+  }
+
+  // ── Render ─────────────────────────────────────────────────────────────────
+
+  if (fetchingData) {
     return (
-      <div className="min-h-[60vh] flex flex-col items-center justify-center space-y-4">
-        <div className="w-12 h-12 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin"></div>
-        <p className="text-[10px] text-zinc-500 uppercase tracking-[0.3em] font-black">Analyzing Skill Matrix...</p>
+      <div className="flex items-center justify-center min-h-[40vh]">
+        <p className="text-zinc-500 text-sm">Loading...</p>
       </div>
     );
   }
 
-  const radarData = skills.map(s => ({
-    subject: s.skillName,
-    A: proficiencyMap[s.proficiency] || 0,
-    fullMark: 100,
-  }));
+  if (error) {
+    return (
+      <div className="max-w-lg mx-auto mt-10 p-6 bg-rose-500/10 border border-rose-500/20 rounded-2xl text-center">
+        <p className="text-rose-400 text-sm">{error}</p>
+      </div>
+    );
+  }
+
+  const matchPercent = result
+    ? Math.round((result.matchedSkills.length / (result.matchedSkills.length + result.missingSkills.length || 1)) * 100)
+    : 0;
 
   return (
-    <div className="space-y-10 pb-20 max-w-6xl mx-auto">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-        <div className="space-y-2">
-          <div className="flex items-center gap-2 text-blue-500 mb-2">
-            <BarChart3 className="w-4 h-4" />
-            <span className="text-[10px] font-black uppercase tracking-[0.3em]">Intelligence Analysis</span>
-          </div>
-          <h1 className="text-4xl font-black text-white tracking-tighter sm:text-5xl">Skill Gap Analysis</h1>
-          <p className="text-sm text-zinc-500 max-w-xl font-medium leading-relaxed">
-            Compare your current skill inventory against industry role requirements to identify precise development targets.
-          </p>
+    <div className="max-w-3xl mx-auto pb-20 space-y-8">
+
+      {/* ── Header ── */}
+      <div className="border-b border-white/5 pb-8">
+        <h1 className="text-3xl font-bold text-white tracking-tight">Skill Gap Checker</h1>
+        <p className="text-zinc-500 text-sm mt-2">
+          Select a job role to see which skills you already have and what you still need to learn.
+        </p>
+      </div>
+
+      {/* ── Role Selector ── */}
+      <div className="bg-zinc-900 border border-white/10 rounded-2xl p-6 space-y-4">
+        <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-widest">
+          Select a Job Role
+        </label>
+
+        {/* Searchable input with suggestions */}
+        <div className="relative" ref={suggestionsRef}>
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none" />
+          <input
+            ref={inputRef}
+            type="text"
+            placeholder="Type a role e.g. Frontend, DevOps..."
+            value={searchInput}
+            onChange={e => {
+              setSearchInput(e.target.value);
+              setShowSuggestions(true);
+              // Clear selection if user edits
+              if (selectedDomainId) { setSelectedDomainId(''); setResult(null); }
+            }}
+            onFocus={() => setShowSuggestions(true)}
+            onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+            className="w-full bg-black/60 border border-white/10 text-white rounded-xl pl-11 pr-10 py-3 text-sm focus:outline-none focus:border-blue-500 transition-colors placeholder:text-zinc-600"
+          />
+          {searchInput && (
+            <button
+              onMouseDown={e => e.preventDefault()}
+              onClick={() => { setSearchInput(''); setSelectedDomainId(''); setResult(null); inputRef.current?.focus(); }}
+              className="absolute right-3 top-1/2 -translate-y-1/2"
+            >
+              <X className="w-4 h-4 text-zinc-500 hover:text-white transition-colors" />
+            </button>
+          )}
+
+          {/* Suggestions dropdown */}
+          {showSuggestions && (
+            <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-zinc-900 border border-white/10 rounded-xl overflow-hidden shadow-xl">
+              {domains
+                .filter(d => !searchInput || d.name.toLowerCase().includes(searchInput.toLowerCase()))
+                .map(d => (
+                  <button
+                    key={d.id}
+                    onMouseDown={e => e.preventDefault()}
+                    onClick={() => {
+                      setSelectedDomainId(d.id);
+                      setSearchInput(d.name);
+                      setShowSuggestions(false);
+                      setResult(null);
+                    }}
+                    className={`w-full text-left px-4 py-3 text-sm transition-colors flex items-center justify-between
+                      ${selectedDomainId === d.id
+                        ? 'bg-blue-600/20 text-blue-300'
+                        : 'text-zinc-300 hover:bg-white/5 hover:text-white'
+                      }`}
+                  >
+                    {d.name}
+                    {selectedDomainId === d.id && (
+                      <CheckCircle className="w-4 h-4 text-blue-400 shrink-0" />
+                    )}
+                  </button>
+                ))
+              }
+              {domains.filter(d => !searchInput || d.name.toLowerCase().includes(searchInput.toLowerCase())).length === 0 && (
+                <p className="px-4 py-3 text-zinc-600 text-sm">No matching roles found</p>
+              )}
+            </div>
+          )}
         </div>
+
+        {/* Selected role pill */}
+        {selectedDomainId && (
+          <p className="text-xs text-blue-400">
+            ✓ Selected: <span className="font-semibold">{searchInput}</span>
+          </p>
+        )}
+
         <button
-          onClick={() => onNavigate('add-skill')}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg text-xs font-bold uppercase tracking-widest transition-all flex items-center gap-2 w-fit shadow-lg shadow-blue-500/20"
+          onClick={handleAnalyze}
+          disabled={loading || !selectedDomainId}
+          className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-xl text-sm transition-colors flex items-center justify-center gap-2"
         >
-          Update Skills <ArrowRight className="w-3.5 h-3.5" />
+          {loading ? 'Analyzing...' : (
+            <>
+              <Target className="w-4 h-4" />
+              Analyze My Skills
+            </>
+          )}
         </button>
       </div>
 
-      <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 px-4 py-3 text-[11px] text-zinc-300 leading-relaxed">
-        <span className="font-bold text-blue-400 uppercase tracking-widest text-[10px]">Auto analysis </span>
-        Gap scores use your saved skills from <span className="text-white font-semibold">My Skills</span> as soon as you pick a role. Optional career text below only refines inferred skills—it is not required.
-      </div>
+      {/* ── Results ── */}
+      {result && (
+        <div className="space-y-6">
 
-      <div className="theme-card">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-sm font-bold text-white uppercase tracking-widest">Optional career context</h2>
-          {analyzing && <span className="text-[10px] font-bold uppercase tracking-widest text-blue-400">Analyzing...</span>}
-        </div>
-        <textarea
-          value={careerSummary}
-          onChange={(e) => setCareerSummary(e.target.value)}
-          placeholder="Optional: projects, tools, seniority, domains. Example: Junior frontend dev; React dashboards; learning TypeScript and testing."
-          className="h-28 w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none transition-all placeholder:text-zinc-500 focus:border-blue-500"
-        />
-        <p className="mt-2 text-[10px] uppercase tracking-widest text-zinc-500">
-          When this is at least 10 characters, we infer extra skills and merge them with your profile (max combined accuracy).
-        </p>
-        <div className="mt-4 flex justify-end">
-          <button
-            type="button"
-            onClick={runAnalysis}
-            disabled={!selectedRole || analyzing}
-            className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-[10px] font-bold uppercase tracking-widest text-white transition-all hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {analyzing ? (
-              <>
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                Analyzing...
-              </>
-            ) : (
-              <>
-                Analyze Gap
-                <ArrowRight className="h-3.5 w-3.5" />
-              </>
-            )}
-          </button>
-        </div>
-      </div>
-
-      {/* Role Selector */}
-      {roles.length > 0 && (
-        <div className="theme-card">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <h2 className="text-xs font-bold text-white uppercase tracking-widest">Job role selector</h2>
-              <p className="mt-1 text-[10px] uppercase tracking-widest text-zinc-500">
-                Choose your target role to compare required skills and get next-step guidance.
-              </p>
+          {/* Summary Bar */}
+          <div className="bg-zinc-900 border border-white/10 rounded-2xl p-6">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-white font-bold text-base">{result.jobRole}</h2>
+              <BarChart3 className="w-5 h-5 text-blue-400" />
+              <span className="text-blue-400 font-bold text-lg">{matchPercent}% Match</span>
             </div>
-            {selectedRole && (
-              <button
-                type="button"
-                onClick={openRoleResources}
-                className="rounded-lg border border-blue-500/30 bg-blue-600/20 px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-blue-200 hover:bg-blue-600/30"
-              >
-                Role resources
-              </button>
-            )}
+            <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-emerald-500 to-blue-600 rounded-full transition-all duration-700"
+                style={{ width: `${matchPercent}%` }}
+              />
+            </div>
+            <p className="text-zinc-500 text-xs mt-2">
+              You have {result.matchedSkills.length} of {result.matchedSkills.length + result.missingSkills.length} required skills
+            </p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            {roles.map(role => (
-              <button
-                key={role.id}
-                onClick={() => setSelectedRole(role)}
-                className={cn(
-                  "px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest border transition-all",
-                  selectedRole?.id === role.id
-                    ? "bg-blue-600 text-white border-blue-500 shadow-lg shadow-blue-500/20"
-                    : "bg-white/5 text-zinc-400 border-white/5 hover:text-white hover:border-white/10"
-                )}
-              >
-                {role.roleName}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
 
-      {selectedRole && analysis && analysisRequested && (
-        <>
-          {(analysis.recommendations?.length > 0 || analysis.missingSkills?.length > 0) && (
-            <div className="theme-card border-amber-500/20 bg-amber-500/3">
-              <h3 className="mb-3 text-xs font-bold uppercase tracking-widest text-amber-200 flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-amber-400" />
-                Suggested next steps
+          {/* Analyzer Graph */}
+          <div className="bg-zinc-900/50 border border-white/10 rounded-2xl p-6">
+            <h3 className="text-white font-semibold text-base mb-4 flex items-center gap-2">
+              <BarChart3 className="w-5 h-5 text-blue-400" />
+              Skill Gap Analyzer (Top 10 Skills)
+            </h3>
+            <div className="h-80">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={result!.matchedSkills.slice(0, 10).concat(result!.missingSkills.slice(0, 10)).map(skill => ({
+                  skill,
+                  yourScore: result!.matchedSkills.some(s => s.toLowerCase().includes(skill.toLowerCase())) ? 1 : 0,
+                  required: 1
+                }))}>
+</xai:function_call >
+
+<xai:function_call name="edit_file">
+<parameter name="path">src/pages/SkillAnalysis.tsx
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--muted)/0.2)" vertical={false} />
+                  <XAxis dataKey="skill" angle={-45} height={80} tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} tickLine={false} axisLine={false} />
+                  <YAxis type="number" domain={[0, 1]} tickLine={false} axisLine={false} tick={{ fill: 'hsl(var(--muted-foreground))' }} />
+                  <Tooltip 
+                    contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--muted))', borderRadius: '8px' }}
+                    labelStyle={{ color: 'hsl(var(--foreground))' }}
+                    itemStyle={{ color: 'hsl(var(--foreground))' }}
+                  />
+                  <Bar dataKey="required" stackId="a" fill="hsl(var(--muted)/0.3)" name="Required" />
+                  <Bar dataKey="yourScore" stackId="a" fill="#10b981" name="Your Level">
+                    {result!.matchedSkills.slice(0, 10).concat(result!.missingSkills.slice(0, 10)).map((skill, index) => (
+                      <Cell key={`cell-${index}`} fill={result!.matchedSkills.some(s => s === skill) ? "#10b981" : "#ef4444"} />
+                    ))}
+
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            <p className="text-zinc-500 text-xs mt-3 text-center">
+              Green = You have it | Red = Gap to fill
+            </p>
+          </div>
+
+          {/* Skills to Improve */}
+          {result.weakSkills.length > 0 && (
+            <div className="bg-zinc-900 border border-amber-500/20 rounded-2xl p-6">
+              <h3 className="flex items-center gap-2 text-amber-400 font-semibold text-sm mb-4">
+                <AlertCircle className="w-4 h-4" />
+                Skills to Improve ({result.weakSkills.length})
               </h3>
-              <ol className="list-decimal list-inside space-y-2 text-[11px] text-zinc-300">
-                {(analysis.recommendations || []).slice(0, 4).map((line: string, i: number) => (
-                  <li key={i} className="pl-1">{line}</li>
-                ))}
-                {(!analysis.recommendations || analysis.recommendations.length === 0) && (analysis.missingSkills || []).slice(0, 3).map((sk: string) => (
-                  <li key={sk} className="pl-1">
-                    Close the gap on <span className="font-semibold text-white">{sk}</span>—add it in My Skills or open the Library for a course.
-                  </li>
-                ))}
-              </ol>
-              <div className="mt-4 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => onNavigate('add-skill')}
-                  className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-white hover:bg-white/10"
-                >
-                  Update skills
-                </button>
-                <button
-                  type="button"
-                  onClick={openRoleResources}
-                  className="rounded-lg border border-blue-500/30 bg-blue-600/20 px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-blue-200 hover:bg-blue-600/30"
-                >
-                  Role-matched library
-                </button>
-              </div>
-            </div>
-          )}
-          {analysis.inferredSkills?.length > 0 && (
-            <div className="theme-card">
-              <h3 className="mb-4 text-xs font-bold uppercase tracking-widest text-zinc-400">Inferred from your career summary</h3>
               <div className="flex flex-wrap gap-2">
-                {analysis.inferredSkills.map((s: any) => (
-                  <span key={s.skillName} className="rounded border border-blue-500/30 bg-blue-500/10 px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-blue-300">
-                    {s.skillName} ({Math.round((s.proficiencyLevel || 0.6) * 100)}%)
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-          {/* Match Score Card */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="theme-card relative overflow-hidden"
-            >
-              <div className="absolute top-4 right-4 opacity-5">
-                <Target className="w-16 h-16 text-white" />
-              </div>
-              <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-4">Skill Match Score</p>
-              <div className="flex items-baseline gap-3">
-                <span className={cn(
-                  "text-4xl font-black",
-                  analysis.skillMatchScore >= 80 ? "text-emerald-400" : analysis.skillMatchScore >= 50 ? "text-amber-400" : "text-rose-400"
-                )}>
-                  {analysis.skillMatchScore}%
-                </span>
-              </div>
-              <div className="mt-4 theme-progress-bar">
-                <motion.div
-                  className={cn(
-                    "theme-progress-fill",
-                    analysis.skillMatchScore >= 80 ? "bg-emerald-500" : analysis.skillMatchScore >= 50 ? "bg-amber-500" : "bg-rose-500"
-                  )}
-                  initial={{ width: 0 }}
-                  animate={{ width: `${analysis.skillMatchScore}%` }}
-                  transition={{ duration: 0.8, ease: 'easeOut' }}
-                />
-              </div>
-              <p className="text-[10px] text-zinc-600 mt-3 font-medium">
-                {analysis.skillMatchScore >= 80 ? 'Strong candidate profile' : analysis.skillMatchScore >= 50 ? 'Moderate alignment - gaps identified' : 'Significant skill gaps detected'}
-              </p>
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-              className="theme-card"
-            >
-              <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-4">Weak Skills</p>
-              <div className="flex items-baseline gap-3">
-                <span className="text-4xl font-black text-amber-400">{analysis.weakSkills?.length || 0}</span>
-                <span className="text-[10px] text-zinc-500 uppercase">of {analysis.totalRequired}</span>
-              </div>
-              <div className="mt-4 space-y-2">
-                {(analysis.weakSkills || []).slice(0, 3).map((ws: any) => (
-                  <div key={ws.skill} className="rounded-lg border border-white/10 p-2">
-                    <div className="mb-1 flex items-center justify-between text-[10px]">
-                      <span className="font-bold text-zinc-200">{ws.skill}</span>
-                      <span className={cn(
-                        "rounded px-1.5 py-0.5 font-bold uppercase",
-                        ws.priority === "High" ? "bg-rose-500/20 text-rose-300" :
-                        ws.priority === "Medium" ? "bg-amber-500/20 text-amber-300" :
-                        "bg-emerald-500/20 text-emerald-300"
-                      )}>
-                        {ws.priority}
-                      </span>
-                    </div>
-                    <div className="h-1.5 rounded bg-white/10">
-                      <div className="h-1.5 rounded bg-amber-400" style={{ width: `${Math.round((ws.userLevel / ws.requiredLevel) * 100)}%` }} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-              className="theme-card"
-            >
-              <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-4">Missing Skills</p>
-              <div className="flex items-baseline gap-3">
-                <span className="text-4xl font-black text-rose-400">{analysis.missingSkills?.length || 0}</span>
-                <span className="text-[10px] text-zinc-500 uppercase">missing skills</span>
-              </div>
-              <div className="mt-4 flex flex-wrap gap-1.5">
-                {(analysis.missingSkills || []).slice(0, 4).map((skill: string) => (
-                  <span key={skill} className="text-[9px] font-bold text-rose-400 bg-rose-500/10 px-2 py-1 rounded border border-rose-500/20 uppercase tracking-wider">
+                {result.weakSkills.map(skill => (
+                  <span key={skill} className="px-3 py-1 bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs rounded-lg font-medium">
                     {skill}
                   </span>
                 ))}
-                {(analysis.missingSkills || []).length > 4 && (
-                  <span className="text-[9px] font-bold text-zinc-500 px-2 py-1">+{(analysis.missingSkills || []).length - 4} more</span>
-                )}
-              </div>
-            </motion.div>
-          </div>
-
-          {/* Gap Analysis Chart */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-            <div className="lg:col-span-7 theme-card">
-              <div className="flex items-center justify-between mb-8">
-                <div>
-                  <h2 className="text-sm font-bold text-white uppercase tracking-widest flex items-center gap-2">
-                    <Zap className="w-4 h-4 text-blue-500" />
-                    Skill Gap Visualization
-                  </h2>
-                  <p className="text-[10px] text-zinc-500 mt-1 uppercase font-bold tracking-wider">Your level vs required threshold</p>
-                </div>
-              </div>
-              <div className="h-[350px] w-full">
-                {analysis.gapData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
-                    <BarChart data={analysis.gapData} layout="vertical" margin={{ left: 20 }}>
-                      <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#222" opacity={0.3} />
-                      <XAxis type="number" domain={[0, 100]} axisLine={false} tickLine={false} tick={{ fill: '#71717a', fontSize: 10 }} />
-                      <YAxis type="category" dataKey="skill" axisLine={false} tickLine={false} tick={{ fill: '#71717a', fontSize: 10, fontWeight: 600 }} width={100} />
-                      <Tooltip
-                        contentStyle={{ backgroundColor: '#09090b', border: '1px solid #27272a', borderRadius: '12px' }}
-                        itemStyle={{ color: '#fff', fontSize: '11px', fontWeight: 'bold', textTransform: 'uppercase' }}
-                        labelStyle={{ color: '#71717a', marginBottom: '8px', fontSize: '9px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.1em' }}
-                      />
-                      <Bar dataKey="userLevel" name="Your Level" radius={[0, 4, 4, 0]}>
-                        {analysis.gapData.map((_: any, i: number) => (
-                          <Cell key={`cell-${i}`} fill={COLORS[i % COLORS.length]} />
-                        ))}
-                      </Bar>
-                      <Bar dataKey="requiredLevel" name="Required" fill="#ffffff10" radius={[0, 4, 4, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="h-full flex items-center justify-center text-zinc-600">
-                    <p className="text-[10px] uppercase font-bold tracking-widest">No gap data available</p>
-                  </div>
-                )}
               </div>
             </div>
+          )}
 
-            <div className="lg:col-span-5 space-y-6">
-              {/* User Skills Radar */}
-              <div className="theme-card">
-                <h2 className="text-sm font-bold text-white uppercase tracking-widest mb-6 flex items-center gap-2">
-                  <Target className="w-4 h-4 text-blue-500" />
-                  Current Arsenal
-                </h2>
-                <div className="h-[280px] w-full flex items-center justify-center">
-                  {radarData.length > 0 ? (
-                    <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
-                      <RadarChart cx="50%" cy="50%" outerRadius="70%" data={radarData}>
-                        <PolarGrid stroke="#222" />
-                        <PolarAngleAxis dataKey="subject" tick={{ fill: '#555', fontSize: 9, fontWeight: 600 }} />
-                        <Radar
-                          name="Proficiency"
-                          dataKey="A"
-                          stroke="#3b82f6"
-                          fill="#3b82f6"
-                          fillOpacity={0.15}
-                          strokeWidth={2}
-                        />
-                      </RadarChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <div className="text-zinc-600 uppercase text-[10px] tracking-widest italic">
-                      No skills registered
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Actionable Insights */}
-              <div className="theme-card bg-zinc-900 border-white/5">
-                <div className="flex items-center gap-2 mb-6">
-                  <Lightbulb className="w-4 h-4 text-amber-500" />
-                  <h3 className="text-sm font-bold text-white uppercase tracking-widest">Recommended Skills to Learn</h3>
-                </div>
-                <div className="space-y-4">
-                  {(analysis.recommendedSkillsToLearn || []).length > 0 ? (
-                    (analysis.recommendedSkillsToLearn || []).slice(0, 5).map((skill: string, i: number) => (
-                      <div key={skill} className="flex items-center gap-3 p-3 bg-white/5 rounded-xl border border-white/5">
-                        <div className="w-6 h-6 rounded-full bg-rose-500/10 flex items-center justify-center text-rose-500 text-[10px] font-black">
-                          {i + 1}
-                        </div>
-                        <div className="flex-1">
-                          <p className="text-xs font-bold text-zinc-200">{skill}</p>
-                          <p className="text-[9px] text-zinc-500 uppercase tracking-wider">
-                            {analysis.weakSkills?.find((w: any) => skill.includes(w.skill))?.priority || "High"} Priority
-                          </p>
-                        </div>
-                        <button
-                          onClick={() => onNavigate('library')}
-                          className="text-[9px] font-bold text-blue-500 hover:text-white transition-colors uppercase tracking-wider"
-                        >
-                          Find Resource
-                        </button>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="flex items-center gap-3 p-4 bg-emerald-500/5 rounded-xl border border-emerald-500/10">
-                      <CheckCircle className="w-5 h-5 text-emerald-500" />
-                      <p className="text-xs font-bold text-emerald-400">All required skills matched! Consider advancing proficiency levels.</p>
-                    </div>
-                  )}
-                </div>
-
-                {(analysis.recommendedSkillsToLearn || []).length > 0 && (
-                  <button
-                    onClick={openRoleResources}
-                    className="w-full mt-6 bg-white/5 hover:bg-white/10 border border-white/10 text-white font-bold py-4 rounded-xl text-[10px] uppercase tracking-widest transition-all flex items-center justify-center gap-2"
-                  >
-                    Browse Role Learning Resources <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
-                )}
-              </div>
-            </div>
+          {/* Next Steps */}
+          <div className="bg-zinc-900 border border-blue-500/20 rounded-2xl p-6">
+            <h3 className="text-blue-400 font-semibold text-sm mb-4">What To Do Next</h3>
+            <ol className="space-y-3">
+              {result.nextSteps.map((step, i) => (
+                <li key={i} className="flex items-start gap-3">
+                  <span className="shrink-0 w-5 h-5 rounded-full bg-blue-600/20 border border-blue-500/30 text-blue-400 text-[10px] font-bold flex items-center justify-center mt-0.5">
+                    {i + 1}
+                  </span>
+                  <p className="text-zinc-300 text-sm leading-relaxed">{step}</p>
+                </li>
+              ))}
+            </ol>
           </div>
-        </>
-      )}
 
-      {!selectedRole && roles.length === 0 && (
-        <div className="theme-card min-h-[400px] flex flex-col items-center justify-center text-center space-y-6">
-          <Layers className="w-12 h-12 text-zinc-700" />
-          <div>
-            <h3 className="text-lg font-bold text-white uppercase tracking-widest">No Job Roles Configured</h3>
-            <p className="text-[11px] text-zinc-600 uppercase font-bold tracking-widest mt-2">
-              Admin needs to seed job role data for gap analysis
-            </p>
-          </div>
+          {/* CTA to Library */}
+          <button
+            onClick={() => onNavigate('library')}
+            className="w-full flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-white font-semibold py-4 rounded-2xl text-sm transition-colors"
+          >
+            <BookOpen className="w-4 h-4" />
+            Find Learning Resources for This Role
+            <ArrowRight className="w-4 h-4" />
+          </button>
+
         </div>
       )}
     </div>
   );
 }
-
-export default SkillAnalysis;
-

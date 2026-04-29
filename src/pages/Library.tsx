@@ -1,15 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { supabase,getCurrentUser } from '../lib/supabase';
+import { resources as staticResources } from '../lib/resources';
 import { 
-  Book, CheckCircle, ExternalLink, GraduationCap, PlayCircle, Search, 
-  Sparkles, ShieldAlert, Plus, Filter, Trophy, Zap, Clock, Star, 
-  AlertCircle, Code2, ShieldCheck, BarChart3, Cloud, Lock, Smartphone, 
-  Palette, ChevronRight, Layers, LayoutGrid
+  Book, CheckCircle, ExternalLink, GraduationCap, PlayCircle, 
+  Trophy, Zap, Clock, Star, 
+  Code2, ShieldCheck, BarChart3, Cloud, Lock, Smartphone, 
+  Palette, ChevronRight, Layers, LayoutGrid, ShieldAlert
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { learningService, Progress } from '../services/learningService';
 import { gamificationService } from '../services/gamificationService';
-import { CURATED_RESOURCES } from '../lib/data_seeder';
 
 interface Resource {
   id: string;
@@ -18,11 +17,11 @@ interface Resource {
   url: string;
   type: string;
   skillsCovered: string[];
-  difficulty: string;
   platform: string;
-  duration?: string;
+  difficulty: string;
+  domain: string;
   rating?: number;
-  domain?: string;
+  duration?: string;
 }
 
 interface LibraryProps {
@@ -30,28 +29,41 @@ interface LibraryProps {
 }
 
 export function Library({ onNavigate }: LibraryProps) {
-  const [resources, setResources] = useState<Resource[]>([]);
-  const [recommendedResources, setRecommendedResources] = useState<Resource[]>([]);
+  const [resources, setResources] = useState<Resource[]>(staticResources);
   const [progress, setProgress] = useState<Record<string, Progress>>({});
-  const [analysisResult, setAnalysisResult] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [seeding, setSeeding] = useState(false);
-  const [search, setSearch] = useState('');
-  const [filterType, setFilterType] = useState('All');
-  const [filterDifficulty, setFilterDifficulty] = useState('All');
-  const [filterDomain, setFilterDomain] = useState('All');
-  const [showOnlyMySkills, setShowOnlyMySkills] = useState(false);
-  const [showOnlyGaps, setShowOnlyGaps] = useState(false);
-  const [userSkills, setUserSkills] = useState<string[]>([]);
-  const [showFilters, setShowFilters] = useState(false);
-  const [preferredRole, setPreferredRole] = useState<string>('');
+  const [loading, setLoading] = useState(false);
+  const userSkills: string[] = ['React', 'TypeScript', 'Tailwind CSS']; // Mock user skills for recommendations
+  const seeding = false;
+  const error = null;
+  const filterType = 'All';
+  const filterDomain = 'All';
+  const filterDifficulty = 'All';
+
+  const handleSeed = () => {
+    console.log('Seed clicked - static mode');
+  };
+
+  const fetchData = () => {
+    console.log('Fetch data - static mode');
+  };
+
+  const setFilterType = (type: string) => {
+    console.log('Filter type:', type);
+  };
+
+  const setFilterDifficulty = (difficulty: string) => {
+    console.log('Filter difficulty:', difficulty);
+  };
+
+  const setFilterDomain = (domain: string) => {
+    console.log('Filter domain:', domain);
+  };
 
   const DOMAINS = [
     { name: 'Full Stack', icon: Layers, color: 'text-indigo-400', bg: 'bg-indigo-400/10', border: 'border-indigo-500/20' },
     { name: 'Frontend', icon: Code2, color: 'text-blue-400', bg: 'bg-blue-400/10', border: 'border-blue-500/20' },
     { name: 'Backend', icon: ShieldCheck, color: 'text-emerald-400', bg: 'bg-emerald-400/10', border: 'border-emerald-500/20' },
-    { name: 'AI / Machine Learning', icon: Sparkles, color: 'text-purple-400', bg: 'bg-purple-400/10', border: 'border-purple-500/20' },
+{ name: 'AI / Machine Learning', icon: Zap, color: 'text-purple-400', bg: 'bg-purple-400/10', border: 'border-purple-500/20' },
     { name: 'Data Science', icon: BarChart3, color: 'text-amber-400', bg: 'bg-amber-400/10', border: 'border-amber-500/20' },
     { name: 'DevOps', icon: Zap, color: 'text-orange-400', bg: 'bg-orange-400/10', border: 'border-orange-500/20' },
     { name: 'Cloud Computing', icon: Cloud, color: 'text-cyan-400', bg: 'bg-cyan-400/10', border: 'border-cyan-500/20' },
@@ -60,223 +72,48 @@ export function Library({ onNavigate }: LibraryProps) {
     { name: 'UI/UX Design', icon: Palette, color: 'text-pink-400', bg: 'bg-pink-400/10', border: 'border-pink-500/20' }
   ];
 
-  const fetchData = async () => {
-    const user = await getCurrentUser();
-    if (!user) return;
-    setLoading(true);
-    setError(null);
-    try {
-      // Fetch user skills for filtering
-      const { data: skillsData, error: skillsError } = await supabase.from('user_skills').select('skill_name').eq('user_id', user.id);
-      if (skillsError) throw skillsError;
-      const skillsList = (skillsData || []).map((row: any) => row.skill_name);
-      setUserSkills(skillsList);
-
-      const { data: resDataRaw, error: resError } = await supabase
-  .from('learning_resources')
-  .select('*')
-  .order('rating', { ascending: false });
-      if (resError) throw resError;
-     const resData = (resDataRaw || []).map((doc: any) => ({
-  id: doc.id,
-  title: doc.title,
-  description: doc.description,
-  url: doc.url,
-  type: doc.resource_type,
-  skillsCovered: doc.skills_covered || [],
-  difficulty: doc.level,
-  platform: doc.provider,
-  duration: doc.duration,
-  rating: doc.rating,
-  domain: doc.domain
-      } as Resource));
-
-      const curatedResources = (CURATED_RESOURCES || []).map((r: any, index: number) => ({
-        id: `curated-${index}-${r.url || r.title}`,
-        title: r.title,
-        description: r.description || `${r.title} learning resource`,
-        url: r.url,
-        type: r.type || 'Course',
-        skillsCovered: r.skillsCovered || [],
-        difficulty: r.difficulty || 'Beginner',
-        platform: r.platform || 'Unknown',
-        duration: r.duration,
-        rating: r.rating,
-        domain: r.domain || 'Full Stack',
-      } as Resource));
-
-      const mergedByUrl = new Map<string, Resource>();
-      [...dbResources, ...curatedResources].forEach((resource) => {
-        if (!resource?.url) return;
-        mergedByUrl.set(resource.url, resource);
-      });
-      setResources(Array.from(mergedByUrl.values()));
-
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData.session?.access_token;
-      if (token) {
-        const recResp = await fetch('/api/recommendations', {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        if (recResp.ok) {
-          const recData = await recResp.json();
-          const normalized = (recData || []).map((doc: any) => ({
-            id: doc.id,
-            title: doc.title,
-            description: doc.description,
-            url: doc.url,
-            type: doc.type,
-            skillsCovered: doc.skills_covered || [],
-            difficulty: doc.difficulty,
-            platform: doc.platform,
-            duration: doc.duration,
-            rating: doc.rating,
-            domain: doc.domain
-          } as Resource));
-          setRecommendedResources(normalized.slice(0, 3));
-        } else {
-          setRecommendedResources([]);
-        }
-      } else {
-        setRecommendedResources([]);
-      }
-
-      const progData = await learningService.getUserProgress(user.id);
+  useEffect(() => {
+    // Static resources loaded
+    // Load progress if available
+    learningService.getUserProgress().then(progData => {
       const progMap: Record<string, Progress> = {};
       progData.forEach((p: any) => {
         progMap[p.resourceId] = p;
       });
       setProgress(progMap);
-
-      const preferredDomain = localStorage.getItem('library.preferredDomain');
-      const preferredRoleName = localStorage.getItem('library.preferredRole');
-      const preferredMissingRaw = localStorage.getItem('library.preferredMissingSkills');
-      if (preferredDomain && preferredDomain !== 'All') {
-        setFilterDomain(preferredDomain);
-      }
-      if (preferredRoleName) {
-        setPreferredRole(preferredRoleName);
-      }
-      if (preferredMissingRaw) {
-        try {
-          const missingSkills = JSON.parse(preferredMissingRaw) as string[];
-          if (Array.isArray(missingSkills) && missingSkills.length > 0) {
-            setSearch(missingSkills[0]);
-            setShowOnlyGaps(true);
-          }
-        } catch {
-          // Ignore malformed localStorage payload.
-        }
-      }
-    } catch (e: any) {
-      console.error("Library load error:", e);
-      setError(e.message || "Failed to load curriculum data.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchData();
+    }).catch(console.error);
   }, []);
 
-  async function handleSeed() {
-    setSeeding(true);
-    try {
-      const user = await getCurrentUser();
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData.session?.access_token;
-      const res = await fetch('/api/admin/seed', {
-        method: 'POST',
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.details || data.error || 'Could not load curriculum');
-      await fetchData();
-      if (user) {
-        await gamificationService.awardPoints(user.id, 100, 'Curriculum Synchronization');
-        await gamificationService.awardBadge(user.id, 'nexus_pioneer');
-      }
-      alert('Knowledge clusters synchronized successfully! +100 IQ awarded.');
-    } catch (e: any) {
-      console.error(e);
-      alert(e.message || 'Synchronization failed');
-    } finally {
-      setSeeding(false);
-    }
-  }
 
-  async function handleUpdateProgress(resourceId: string, status: Progress['status'], incProgress: number) {
-    const user = await getCurrentUser();
-    if (!user) return;
-    try {
-      const isNewlyCompleted = status === 'Completed' && progress[resourceId]?.status !== 'Completed';
-      
-      await learningService.updateProgress(user.id, resourceId, {
+
+  async function handleUpdateProgress(resourceId: string, status: 'Not Started' | 'In Progress' | 'Completed', incProgress: number) {
+    // Local progress update for static resources
+    const newProgress = {
+      ...progress,
+      [resourceId]: {
         status,
         progress: incProgress,
-        timeSpent: 1 // Increment by 1 hour for demo
-      });
-
-      if (isNewlyCompleted) {
-        await gamificationService.awardPoints(user.id, 50, 'Module Completion');
-        // Check for Module Master badge
-        const completedCount = Object.values(progress).filter(p => p.status === 'Completed').length + 1;
-        if (completedCount >= 5) {
-          await gamificationService.awardBadge(user.id, 'module_master');
-        }
+        timeSpent: 1
       }
-
-      const updatedProg = await learningService.getUserProgress(user.id);
-      const progMap: Record<string, Progress> = {};
-      updatedProg.forEach((p: any) => {
-        progMap[p.resourceId] = p;
-      });
-      setProgress(progMap);
-    } catch (e) {
-      console.error(e);
-    }
+    } as Record<string, Progress>;
+    setProgress(newProgress);
   }
 
-  const filtered = resources.filter(r => {
-    const searchLower = search.toLowerCase();
-    const matchesSearch = r.title?.toLowerCase().includes(searchLower) || 
-                         r.skillsCovered?.some(s => s.toLowerCase().includes(searchLower)) ||
-                         r.description?.toLowerCase().includes(searchLower);
-    const matchesType = filterType === 'All' || r.type === filterType;
-    const matchesDiff = filterDifficulty === 'All' || r.difficulty === filterDifficulty;
-    
-    // Strict Domain match logic
-    const resourceDomain = (r as any).domain;
-    const matchesDomain = filterDomain === 'All' || resourceDomain === filterDomain;
+  const filtered = resources;
 
-    // Intelligence Filters
-    const matchesMySkills = !showOnlyMySkills || r.skillsCovered?.some(s => userSkills.includes(s));
-    const matchesGaps = !showOnlyGaps || r.skillsCovered?.some(s => !userSkills.includes(s));
+  const recommended = resources.filter(r => 
+    r.skillsCovered.some((s: string) => userSkills.includes(s)) || (r.rating && r.rating >= 4.9)
+  ).slice(0, 3);
 
-    return matchesSearch && matchesType && matchesDiff && matchesDomain && matchesMySkills && matchesGaps;
-  });
+  const getYouTubeThumbnail = (url: string) => {
+    const regExp = /^.*(youtu\.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+    const match = url.match(regExp);
+    return (match && match[2].length === 11)
+      ? `https://img.youtube.com/vi/${match[2]}/mqdefault.jpg`
+      : `https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=800&auto=format&fit=crop&q=60`;
+  };
 
-  if (loading && !seeding) return (
-    <div className="min-h-[60vh] flex flex-col items-center justify-center space-y-4">
-      <div className="w-12 h-12 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin"></div>
-      <p className="text-[10px] text-zinc-500 uppercase tracking-[0.3em] font-black">Syncing Knowledge Base...</p>
-    </div>
-  );
-
-  if (error) return (
-    <div className="min-h-[40vh] flex flex-col items-center justify-center p-12 theme-card border-rose-500/20 bg-rose-500/5 max-w-2xl mx-auto">
-      <ShieldAlert className="w-12 h-12 text-rose-500 mb-6 opacity-30" />
-      <h2 className="text-xl font-bold text-white uppercase tracking-widest mb-2">Protocol Interrupted</h2>
-      <p className="text-xs text-zinc-600 uppercase font-bold tracking-widest mb-8 text-center">{error}</p>
-      <button 
-        onClick={() => fetchData()}
-        className="px-8 py-4 bg-white/5 hover:bg-white/10 text-white rounded-2xl text-[10px] font-bold uppercase tracking-widest border border-white/10 transition-all"
-      >
-        Retry Synchronization
-      </button>
-    </div>
-  );
+  const videoResources = resources.filter(r => r.type === 'Course').slice(0, 4); // Static, no 'Video' types
 
   return (
     <div className="space-y-10 pb-20 max-w-6xl mx-auto">
@@ -306,23 +143,14 @@ export function Library({ onNavigate }: LibraryProps) {
       </div>
 
       {/* Recommendations Bar */}
-      {preferredRole && (
-        <div className="theme-card border-blue-500/20 bg-blue-500/5">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-blue-300">Role-linked library mode</p>
-          <p className="mt-2 text-xs text-zinc-300">
-            Showing learning resources prioritized for <span className="font-bold text-white">{preferredRole}</span> and its domain.
-          </p>
-        </div>
-      )}
-
-      {recommendedResources.length > 0 && !search && (
+      {recommended.length > 0 && (
         <div className="space-y-6">
           <h2 className="text-xs font-bold text-zinc-400 uppercase tracking-[0.2em] flex items-center gap-2">
             <Zap className="w-4 h-4 text-amber-500" />
             Priority Recommendations
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {recommendedResources.map(res => (
+            {recommended.map(res => (
               <div key={`rec-${res.id}`} className="bg-indigo-600/10 border border-indigo-500/20 rounded-2xl p-6 relative group overflow-hidden">
                 <div className="flex items-center gap-2 text-amber-500 text-[9px] font-bold uppercase tracking-widest mb-3">
                    <Star className="w-3 h-3 fill-amber-500" /> Skill Match Found
@@ -345,126 +173,118 @@ export function Library({ onNavigate }: LibraryProps) {
         </div>
       )}
 
+      {/* YouTube Style Video Section */}
+      {videoResources.length > 0 && (
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <h2 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.3em] flex items-center gap-3">
+              <PlayCircle className="w-4 h-4 text-rose-500" /> Watch & Learn
+            </h2>
+            <div className="flex items-center gap-4">
+               <span className="text-[9px] font-black text-zinc-600 uppercase tracking-widest hidden sm:block">Masterclasses by Expert Architects</span>
+               <button 
+                 onClick={() => setFilterType('Video')}
+                 className="text-[9px] font-black uppercase tracking-widest text-blue-500 hover:text-white transition-colors"
+               >
+                 Browse All Videos
+               </button>
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {videoResources.map((res) => (
+              <div 
+                key={`vid-${res.id}`} 
+                className="group cursor-pointer space-y-3"
+                onClick={() => window.open(res.url, '_blank')}
+              >
+                {/* 16:9 Thumbnail Container */}
+                <div className="relative aspect-video rounded-2xl overflow-hidden border border-white/5 bg-zinc-900 group-hover:border-blue-500/30 transition-all shadow-lg group-hover:shadow-[0_0_30px_rgba(37,99,235,0.1)]">
+                  <img 
+                    src={getYouTubeThumbnail(res.url)} 
+                    alt={res.title}
+                    referrerPolicy="no-referrer"
+                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110 opacity-70 group-hover:opacity-100"
+                  />
+                  {/* Duration Badge */}
+                  <div className="absolute bottom-2 right-2 px-1.5 py-0.5 bg-black/80 rounded text-[9px] font-bold text-white uppercase tracking-wider">
+                    {res.duration || '12:00'}
+                  </div>
+                  {/* Play Overlay */}
+                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="w-12 h-12 rounded-full bg-blue-600 flex items-center justify-center shadow-2xl scale-75 group-hover:scale-100 transition-transform">
+                       <PlayCircle className="w-6 h-6 text-white fill-current" />
+                    </div>
+                  </div>
+                  {/* Progress Bar (Sample) */}
+                  <div className="absolute bottom-0 left-0 h-0.5 bg-blue-600/30 w-full overflow-hidden">
+                    <div className="h-full bg-blue-500 w-[45%]" />
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex-shrink-0 border border-white/10 flex items-center justify-center text-[10px] font-black text-white shadow-lg">
+                      {res.platform[0]}
+                    </div>
+                    <div className="space-y-1">
+                      <h3 className="text-sm font-black text-white leading-tight line-clamp-2 group-hover:text-blue-400 transition-colors">
+                        {res.title}
+                      </h3>
+                      <div className="flex items-center gap-2 text-[9px] font-bold text-zinc-500 uppercase tracking-widest">
+                        <span>{res.platform}</span>
+                        <span className="text-zinc-800">•</span>
+                        <span>{Math.floor(Math.random() * 50) + 10}K views</span>
+                        <span className="text-zinc-800">•</span>
+                        <span>2 weeks ago</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Domain intelligence Grid */}
       <div className="space-y-6">
         <div className="flex items-center justify-between">
            <h2 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.3em] flex items-center gap-3">
              <LayoutGrid className="w-4 h-4 text-blue-500" /> Career Domains
            </h2>
-           <button 
-             onClick={() => setFilterDomain('All')}
-             className={`text-[9px] font-black uppercase tracking-widest hover:text-white transition-colors flex items-center gap-2 ${filterDomain === 'All' ? 'text-blue-500' : 'text-zinc-600'}`}
-           >
-             Show All Clusters <ChevronRight className="w-2.5 h-2.5" />
-           </button>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
            {DOMAINS.map(domain => {
-             const IsActive = filterDomain === domain.name;
-             const domainResourcesCount = resources.filter(r => (r as any).domain === domain.name).length;
+             const domainResourcesCount = resources.filter(r => r.domain === domain.name).length;
              
              return (
-               <button
+               <div
                  key={domain.name}
-                 onClick={() => setFilterDomain(IsActive ? 'All' : domain.name)}
-                 className={`p-5 rounded-3xl border text-left transition-all relative group overflow-hidden h-full flex flex-col justify-between ${IsActive ? `${domain.bg} ${domain.border} shadow-2xl shadow-zinc-950` : 'bg-zinc-900/40 border-white/5 hover:border-white/10'}`}
+                 className={`p-5 rounded-3xl border text-left ${domain.bg} ${domain.border} shadow-xl`}
                >
-                 <div className={`p-3 rounded-2xl inline-flex mb-4 transition-transform group-hover:scale-110 ${domain.bg} ${domain.color}`}>
+                 <div className={`p-3 rounded-2xl inline-flex mb-4 ${domain.bg} ${domain.color}`}>
                    <domain.icon className="w-5 h-5" />
                  </div>
                  <div>
                    <p className="text-xs font-black text-white mb-1 uppercase tracking-tighter leading-none">{domain.name}</p>
-                   <p className="text-[9px] font-black text-zinc-600 uppercase tracking-widest">{domainResourcesCount} Units Available</p>
+                   <p className="text-[9px] font-bold text-white uppercase tracking-widest">{domainResourcesCount} Units</p>
                  </div>
-                 {IsActive && (
-                   <motion.div 
-                     layoutId="active-domain"
-                     className="absolute inset-0 border-2 border-blue-500 rounded-3xl pointer-events-none"
-                   />
-                 )}
-               </button>
+               </div>
              );
            })}
         </div>
       </div>
-                <div className="flex flex-col md:flex-row gap-4 mb-2">
-                  <div className="relative flex-1 group">
-                    <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-500 group-focus-within:text-blue-500 transition-all" />
-                    <input 
-                      type="text" 
-                      placeholder="Search knowledge clusters..."
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
-                      className="w-full pl-14 pr-6 py-5 bg-zinc-900 border border-white/5 rounded-3xl outline-none focus:border-blue-500/50 focus:bg-zinc-800/80 transition-all text-sm text-white placeholder:text-zinc-600 font-medium"
-                    />
-                  </div>
-                  <button 
-                    onClick={() => setShowFilters(!showFilters)}
-                    className={`px-8 py-5 rounded-3xl border transition-all flex items-center gap-3 text-[10px] font-bold uppercase tracking-widest ${showFilters ? 'bg-blue-600 border-blue-500 text-white shadow-xl shadow-blue-500/20' : 'bg-white/5 border-white/10 text-zinc-400 hover:text-white'}`}
-                  >
-                    <Filter className="w-4 h-4" /> Smart Filters
-                  </button>
-                </div>
-
-                <AnimatePresence>
-                  {showFilters && (
-                    <motion.div 
-                      initial={{ height: 0, opacity: 0 }} 
-                      animate={{ height: 'auto', opacity: 1 }} 
-                      exit={{ height: 0, opacity: 0 }} 
-                      className="overflow-hidden"
-                    >
-                      <div className="p-8 bg-zinc-900/50 border border-white/5 rounded-3xl grid grid-cols-1 md:grid-cols-2 gap-8 mb-8 mt-2">
-                         <div className="space-y-4">
-                           <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest flex items-center gap-2 px-1">
-                             <Layers className="w-3.5 h-3.5" /> Content Framework
-                           </label>
-                           <div className="flex flex-wrap gap-2">
-                             {['All', 'Course', 'Video', 'Article'].map(t => (
-                               <button 
-                                 key={t} 
-                                 onClick={() => setFilterType(t)} 
-                                 className={`px-5 py-3 rounded-2xl text-[10px] font-bold uppercase tracking-widest border transition-all ${filterType === t ? 'bg-white text-black border-white' : 'bg-zinc-900 border-white/5 text-zinc-500 hover:text-white'}`}
-                               >
-                                 {t}
-                               </button>
-                             ))}
-                           </div>
-                         </div>
-
-                         <div className="space-y-4">
-                           <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest flex items-center gap-2 px-1">
-                             <Sparkles className="w-3.5 h-3.5" /> Intelligence Targeting
-                           </label>
-                           <div className="flex flex-wrap gap-2">
-                             <button 
-                                onClick={() => setShowOnlyMySkills(!showOnlyMySkills)}
-                                className={`flex items-center gap-3 px-5 py-3 rounded-2xl text-[10px] font-bold uppercase tracking-widest border transition-all ${showOnlyMySkills ? 'bg-blue-500/10 border-blue-500/30 text-blue-400' : 'bg-zinc-900 border-white/5 text-zinc-500 hover:text-white'}`}
-                              >
-                                {showOnlyMySkills ? <CheckCircle className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />} Own Knowledge
-                              </button>
-                              <button 
-                                onClick={() => setShowOnlyGaps(!showOnlyGaps)}
-                                className={`flex items-center gap-3 px-5 py-3 rounded-2xl text-[10px] font-bold uppercase tracking-widest border transition-all ${showOnlyGaps ? 'bg-amber-500/10 border-amber-500/30 text-amber-400' : 'bg-zinc-900 border-white/5 text-zinc-500 hover:text-white'}`}
-                              >
-                                {showOnlyGaps ? <CheckCircle className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />} Identified Gaps
-                              </button>
-                           </div>
-                         </div>
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
 
       {/* Resources Grid */}
       {filtered.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           <AnimatePresence mode="popLayout">
-            {filtered.map((res, i) => {
+            {filtered.map((res: Resource, i: number) => {
               const userProg = progress[res.id];
               const isStarted = !!userProg;
               const isCompleted = userProg?.status === 'Completed';
-              const resourceDomain = DOMAINS.find(d => d.name === (res as any).domain);
+              const resourceDomain = DOMAINS.find(d => d.name === res.domain);
 
               return (
                 <motion.div 
@@ -510,8 +330,8 @@ export function Library({ onNavigate }: LibraryProps) {
                       </div>
 
                       <div className="flex flex-wrap gap-1.5">
-                        {res.skillsCovered?.map(s => (
-                          <span key={`pill-${s}`} className="text-[8px] font-black text-zinc-400 uppercase tracking-widest px-2.5 py-1 bg-white/5 border border-white/5 rounded-md hover:bg-white/10 transition-colors cursor-default">
+                        {res.skillsCovered.map(s => (
+                          <span key={s} className="text-[8px] font-black text-zinc-400 uppercase tracking-widest px-2.5 py-1 bg-white/5 border border-white/5 rounded-md hover:bg-white/10 transition-colors cursor-default">
                             {s}
                           </span>
                         ))}
@@ -591,22 +411,15 @@ export function Library({ onNavigate }: LibraryProps) {
           <div>
             <h3 className="text-lg font-bold text-white uppercase tracking-widest">Knowledge Stream Halted</h3>
             <p className="text-[11px] text-zinc-600 uppercase font-bold tracking-widest mt-2">
-              {search ? 'Nothing found across intelligence clusters' : (filterDomain !== 'All' ? `No specialized units found for ${filterDomain} yet` : 'Intelligence base is offline')}
+              {filterDomain !== 'All' ? `No specialized units found for ${filterDomain} yet` : 'Intelligence base is offline'}
             </p>
           </div>
-          {search || filterDomain !== 'All' ? (
+          {filterDomain !== 'All' ? (
             <button 
               onClick={() => {
-                setSearch('');
                 setFilterType('All');
-                setFilterDifficulty('All');
+                setFilterDifficulty('All'); 
                 setFilterDomain('All');
-                setShowOnlyGaps(false);
-                setPreferredRole('');
-                localStorage.removeItem('library.preferredDomain');
-                localStorage.removeItem('library.preferredRole');
-                localStorage.removeItem('library.preferredMissingSkills');
-                localStorage.removeItem('library.preferredRoleSkills');
               }}
               className="px-6 py-3 bg-white/5 border border-white/10 rounded-xl text-[10px] font-bold text-blue-400 hover:text-white transition-all uppercase tracking-widest"
             >

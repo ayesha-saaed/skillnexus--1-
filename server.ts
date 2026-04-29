@@ -476,6 +476,14 @@ const analyzeSchema = z.object({
     })
 });
 
+const roleResourcesSchema = z.object({
+  jobRoleId: z.string().uuid(),
+  missingSkills: z.array(z.string()).optional(),
+  weakSkills: z.array(z.string()).optional(),
+  domain: z.string().optional()
+});
+
+
 app.post("/api/analyze", requireAuth, async (req, res) => {
   try {
     const parsed = analyzeSchema.safeParse(req.body);

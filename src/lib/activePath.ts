@@ -4,6 +4,8 @@ const LS = {
   roleId: 'skillnexus.activeJobRoleId',
   roleName: 'skillnexus.activeJobRoleName',
   domain: 'skillnexus.activePathDomain',
+  missingSkills: 'skillnexus.activeMissingSkills',
+  weakSkills: 'skillnexus.activeWeakSkills',
 } as const;
 
 export const ACTIVE_PATH_EVENT = 'skillnexus:active-path';
@@ -12,6 +14,8 @@ export type ActivePathPayload = {
   id?: string;
   roleName: string;
   domain: string;
+  missingSkills?: string[];
+  weakSkills?: string[];
 };
 
 export function readActivePathFromStorage(): ActivePathPayload & { roleId?: string } {
@@ -21,7 +25,11 @@ export function readActivePathFromStorage(): ActivePathPayload & { roleId?: stri
   const id = localStorage.getItem(LS.roleId) || undefined;
   const roleName = localStorage.getItem(LS.roleName) || '';
   const domain = localStorage.getItem(LS.domain) || '';
-  return { id, roleName, domain };
+  const missingSkillsRaw = localStorage.getItem(LS.missingSkills);
+  const weakSkillsRaw = localStorage.getItem(LS.weakSkills);
+  const missingSkills = missingSkillsRaw ? JSON.parse(missingSkillsRaw) : [];
+  const weakSkills = weakSkillsRaw ? JSON.parse(weakSkillsRaw) : [];
+  return { id, roleName, domain, missingSkills, weakSkills };
 }
 
 export function persistActivePath(role: ActivePathPayload, userId: string) {
@@ -30,6 +38,10 @@ export function persistActivePath(role: ActivePathPayload, userId: string) {
   else localStorage.removeItem(LS.roleId);
   localStorage.setItem(LS.roleName, role.roleName || '');
   localStorage.setItem(LS.domain, role.domain || '');
+  if (role.missingSkills) localStorage.setItem(LS.missingSkills, JSON.stringify(role.missingSkills));
+  else localStorage.removeItem(LS.missingSkills);
+  if (role.weakSkills) localStorage.setItem(LS.weakSkills, JSON.stringify(role.weakSkills));
+  else localStorage.removeItem(LS.weakSkills);
   window.dispatchEvent(new CustomEvent(ACTIVE_PATH_EVENT, { detail: role }));
 
   void supabase
