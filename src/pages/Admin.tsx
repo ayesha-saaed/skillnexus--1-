@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { supabase, getCurrentUser } from '../lib/firebase';
+import { supabase, getCurrentUser, getAccessToken } from '../lib/supabase';
 import { Key, Users, Briefcase, TrendingUp, Settings, Plus, Trash2, Database, ShieldAlert, Sparkles, LayoutDashboard } from 'lucide-react';
 import { motion } from 'motion/react';
 
@@ -45,17 +45,39 @@ export function Admin({ onNavigate }: AdminProps) {
   }
 
   async function handleAddResource() {
-    if (!newRes.title || !newRes.url || !newRes.skill) return;
+    if (!newRes.title.trim() || !newRes.url.trim() || !newRes.skill.trim()) {
+      alert('Resource title, URL, and linked skill are required.');
+      return;
+    }
+
     try {
-      await supabase.from('resources').insert({
-        title: newRes.title,
-        url: newRes.url,
-        type: newRes.type,
-        difficulty: newRes.difficulty,
-        description: newRes.description,
-        platform: 'Custom',
-        skills_covered: [newRes.skill]
+      const token = await getAccessToken();
+      if (!token) {
+        throw new Error('Unable to authenticate admin session. Please sign in again.');
+      }
+
+      const response = await fetch('/api/admin/resources', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          title: newRes.title.trim(),
+          description: newRes.description.trim(),
+          url: newRes.url.trim(),
+          type: newRes.type,
+          difficulty: newRes.difficulty,
+          platform: 'Custom',
+          skills_covered: [newRes.skill.trim()]
+        })
       });
+
+      const responseData = await response.json();
+      if (!response.ok) {
+        throw new Error(responseData?.error?.message || 'Failed to add resource');
+      }
+
       setNewRes({ title: '', url: '', skill: '', type: 'Course', difficulty: 'Beginner', description: '' });
       fetchStats();
       alert('Resource committed to cloud successfully!');
@@ -213,7 +235,7 @@ export function Admin({ onNavigate }: AdminProps) {
                   <div>
                     <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2 block">Description</label>
                     <textarea 
-                      className="w-full px-5 py-3 bg-black/40 border border-white/10 rounded-xl outline-none focus:border-blue-500 text-sm text-white h-[105px]"
+                      className="w-full px-5 py-3 bg-black/40 border border-white/10 rounded-xl outline-none focus:border-blue-500 text-sm text-white h-26.25"
                       value={newRes.description}
                       onChange={e => setNewRes({...newRes, description: e.target.value})}
                     ></textarea>

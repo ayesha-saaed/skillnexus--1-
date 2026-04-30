@@ -274,8 +274,11 @@ export function IndustryTrends({ onNavigate }: IndustryTrendsProps) {
                       contentStyle={{ 
                         backgroundColor: '#0f0f23', 
                         border: '1px solid #27272a', 
-                        borderRadius: '8px'
-                      }} 
+                        borderRadius: '8px',
+                        color: 'white'
+                      }}
+                      labelStyle={{ color: 'white', fontWeight: 'bold' }}
+                      itemStyle={{ color: 'white' }} 
                     />
                     <Line 
                       type="monotone" 
@@ -342,8 +345,11 @@ export function IndustryTrends({ onNavigate }: IndustryTrendsProps) {
                         contentStyle={{ 
                           backgroundColor: '#0f0f23', 
                           border: '1px solid #27272a', 
-                          borderRadius: '8px'
+                          borderRadius: '8px',
+                          color: 'white'
                         }} 
+                        labelStyle={{ color: 'white', fontWeight: 'bold' }}
+                        itemStyle={{ color: 'white' }}
                       />
                       <Bar 
                         dataKey={chartDataKey}

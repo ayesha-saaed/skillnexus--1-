@@ -1,14 +1,8 @@
-import { createClient, User as SupabaseUser } from '@supabase/supabase-js';
+import { supabase, type User as SupabaseUser, getAccessToken } from './supabase';
 
-const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL;
-const supabaseAnonKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
-
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn('Supabase env is missing: set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY');
-}
-
-export const supabase = createClient(supabaseUrl || '', supabaseAnonKey || '');
+export { supabase };
 export type User = SupabaseUser;
+export { getAccessToken };
 
 export async function getCurrentUser() {
   const { data } = await supabase.auth.getUser();

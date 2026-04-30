@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, Search, Info } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
+import { supabase, getAccessToken } from '../../lib/supabase';
+import { normalizeText, isDuplicateDbError } from '../../lib/utils';
 import { AdminTable } from './AdminTable';
 import { AdminModal } from './AdminModal';
 import { AdminInput } from './AdminInput';
@@ -123,31 +124,57 @@ export function SkillManagement() {
       return;
     }
 
+    const normalizedSkillName = normalizeText(formData.name);
+    const duplicateSkill = skills.some(
+      (skill) => normalizeText(skill.name) === normalizedSkillName && skill.id !== editingId
+    );
+    if (duplicateSkill) {
+      showToast('Already exists', 'error');
+      return;
+    }
+
     try {
       setLoading(true);
-      const row = skillPayload();
-      if (editingId) {
-        const { error } = await supabase.from('skills').update(row as any).eq('id', editingId);
+      const token = await getAccessToken();
+      if (!token) throw new Error('Unable to authenticate admin session. Please sign in again.');
 
-        if (error) throw error;
-        showToast('Skill updated successfully', 'success');
-      } else {
-        const { error } = await supabase.from('skills').insert([row] as any);
-        if (error) throw error;
-        showToast('Skill created successfully', 'success');
+      const payload = {
+        id: editingId || undefined,
+        name: formData.name.trim(),
+        description: formData.description.trim(),
+        domain_id: formData.domain_id.trim() || undefined
+      };
+
+      const response = await fetch('/api/admin/skills', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const responseData = await response.json();
+      if (!response.ok) {
+        throw new Error(responseData?.error?.message || 'Failed to save skill');
       }
 
+      showToast(editingId ? 'Skill updated successfully' : 'Skill created successfully', 'success');
       setIsModalOpen(false);
       resetForm();
       void fetchSkills();
     } catch (err: any) {
-      const msg = err?.message || err?.error?.message || 'Failed to save skill';
-      showToast(
-        /row-level security|RLS|policy|not-null|null value in column "domain_id"/i.test(String(msg))
-          ? `${msg} (If domain is required in your DB, run: ALTER TABLE public.skills ALTER COLUMN domain_id DROP NOT NULL; or add a domain first.)`
-          : msg,
-        'error'
-      );
+      if (isDuplicateDbError(err)) {
+        showToast('Already exists', 'error');
+      } else {
+        const msg = err?.message || err?.error?.message || 'Failed to save skill';
+        showToast(
+          /row-level security|RLS|policy|not-null|null value in column "domain_id"/i.test(String(msg))
+            ? `${msg} (If domain is required in your DB, run: ALTER TABLE public.skills ALTER COLUMN domain_id DROP NOT NULL; or add a domain first.)`
+            : msg,
+          'error'
+        );
+      }
       console.error('Skill save error:', err);
     } finally {
       setLoading(false);
@@ -157,8 +184,19 @@ export function SkillManagement() {
   async function handleDelete(id: string) {
     try {
       setLoading(true);
-      const { error } = await supabase.from('skills').delete().eq('id', id);
-      if (error) throw error;
+      const token = await getAccessToken();
+      if (!token) throw new Error('Unable to authenticate admin session. Please sign in again.');
+
+      const response = await fetch(`/api/admin/skills/${id}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      const responseData = await response.json();
+      if (!response.ok) {
+        throw new Error(responseData?.error?.message || 'Failed to delete skill');
+      }
       showToast('Skill deleted successfully', 'success');
       setIsDeleteConfirmOpen(false);
       fetchSkills();

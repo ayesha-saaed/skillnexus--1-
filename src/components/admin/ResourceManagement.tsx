@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, Search, ExternalLink } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
+import { supabase, getAccessToken } from '../../lib/supabase';
+import { normalizeText, isDuplicateDbError } from '../../lib/utils';
 import { AdminTable } from './AdminTable';
 import { AdminModal } from './AdminModal';
 import { AdminInput } from './AdminInput';
@@ -121,40 +122,61 @@ export function ResourceManagement() {
   }
 
   async function handleSave() {
-    if (!validateForm()) return;
+    if (!validateForm()) {
+      showToast('Please fix the highlighted fields before saving.', 'error');
+      return;
+    }
+
+    const normalizedUrl = normalizeText(formData.url);
+    const duplicateResource = resources.some(
+      (resource) => normalizeText(resource.url) === normalizedUrl && resource.id !== editingId
+    );
+    if (duplicateResource) {
+      showToast('Already exists', 'error');
+      return;
+    }
 
     try {
       setLoading(true);
+      const token = await getAccessToken();
+      if (!token) throw new Error('Unable to authenticate admin session. Please sign in again.');
+
       const dataToSave = {
-        title: formData.title,
-        description: formData.description,
-        url: formData.url,
+        id: editingId || undefined,
+        title: formData.title.trim(),
+        description: formData.description.trim(),
+        url: formData.url.trim(),
         type: formData.type,
         difficulty: formData.difficulty,
-        duration: formData.duration,
+        duration: formData.duration.trim(),
         domain: formData.domain || 'Full Stack',
         skills_covered: formData.skills_covered.length > 0 ? formData.skills_covered : []
       };
 
-      if (editingId) {
-        const { error } = await supabase
-          .from('resources')
-          .update(dataToSave)
-          .eq('id', editingId);
+      const response = await fetch('/api/admin/resources', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(dataToSave)
+      });
 
-        if (error) throw error;
-        showToast('Resource updated successfully', 'success');
-      } else {
-        const { error } = await supabase.from('resources').insert([dataToSave]);
-        if (error) throw error;
-        showToast('Resource created successfully', 'success');
+      const responseData = await response.json();
+      if (!response.ok) {
+        throw new Error(responseData?.error?.message || 'Failed to save resource');
       }
 
+      showToast(editingId ? 'Resource updated successfully' : 'Resource created successfully', 'success');
       setIsModalOpen(false);
       resetForm();
       fetchResources();
     } catch (err: any) {
-      showToast(err.message || 'Failed to save resource', 'error');
+      if (isDuplicateDbError(err)) {
+        showToast('Already exists', 'error');
+      } else {
+        showToast(err.message || 'Failed to save resource', 'error');
+      }
     } finally {
       setLoading(false);
     }
@@ -163,8 +185,20 @@ export function ResourceManagement() {
   async function handleDelete(id: string) {
     try {
       setLoading(true);
-      const { error } = await supabase.from('resources').delete().eq('id', id);
-      if (error) throw error;
+      const token = await getAccessToken();
+      if (!token) throw new Error('Unable to authenticate admin session. Please sign in again.');
+
+      const response = await fetch(`/api/admin/resources/${id}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      const responseData = await response.json();
+      if (!response.ok) {
+        throw new Error(responseData?.error?.message || 'Failed to delete resource');
+      }
+
       showToast('Resource deleted successfully', 'success');
       setIsDeleteConfirmOpen(false);
       fetchResources();

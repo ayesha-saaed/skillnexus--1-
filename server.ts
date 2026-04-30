@@ -678,6 +678,34 @@ const adminRoleSchema = z.object({
   requiredSkills: z.array(z.string()).default([])
 });
 
+const adminDomainSchema = z.object({
+  id: z.string().uuid().optional(),
+  name: z.string().min(2),
+  description: z.string().optional().default(''),
+  icon: z.string().optional(),
+  color: z.string().optional().default('#3b82f6'),
+  image_url: z.string().optional()
+});
+
+const adminSkillSchema = z.object({
+  id: z.string().uuid().optional(),
+  name: z.string().min(2),
+  description: z.string().min(1),
+  domain_id: z.string().optional().transform((val) => (val?.trim() ? val : null))
+});
+
+const adminResourceSchema = z.object({
+  id: z.string().uuid().optional(),
+  title: z.string().min(1),
+  description: z.string().optional().default(''),
+  url: z.string().min(1).url(),
+  type: z.string().min(1).default('Course'),
+  difficulty: z.string().min(1).default('Beginner'),
+  duration: z.string().optional().default(''),
+  domain: z.string().optional().default('Full Stack'),
+  skills_covered: z.array(z.string()).optional().default([])
+});
+
 app.post("/api/admin/roles", requireAuth, requireAdmin, async (req, res) => {
   try {
     const parsed = adminRoleSchema.safeParse(req.body);
@@ -696,6 +724,141 @@ app.post("/api/admin/roles", requireAuth, requireAdmin, async (req, res) => {
     res.json({ id: data.id });
   } catch (error: any) {
     apiError(res, 500, "SERVER_ERROR", "Failed to add role", error.message);
+  }
+});
+
+app.post("/api/admin/domains", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const parsed = adminDomainSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return apiError(res, 400, "VALIDATION_ERROR", "Invalid domain payload", parsed.error.flatten());
+    }
+
+    const payload = {
+      name: parsed.data.name.trim(),
+      description: parsed.data.description?.trim() || null,
+      icon: parsed.data.icon?.trim() || null,
+      color: parsed.data.color || '#3b82f6',
+      image_url: parsed.data.image_url?.trim() || null,
+      updated_at: new Date().toISOString()
+    };
+
+    if (parsed.data.id) {
+      const { error } = await supabaseAdmin!.from("domains").update(payload).eq("id", parsed.data.id);
+      if (error) throw error;
+      auditLog("admin.domain.updated", { actor: (req as AuthedRequest).authUser?.id, domainId: parsed.data.id });
+      return res.json({ id: parsed.data.id });
+    }
+
+    const { data, error } = await supabaseAdmin!.from("domains").insert({ ...payload, created_at: new Date().toISOString() }).select("id").single();
+    if (error) throw error;
+    auditLog("admin.domain.created", { actor: (req as AuthedRequest).authUser?.id, domainId: data.id });
+    res.json({ id: data.id });
+  } catch (error: any) {
+    apiError(res, 500, "SERVER_ERROR", "Failed to save domain", error.message);
+  }
+});
+
+app.delete("/api/admin/domains/:id", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const id = req.params.id;
+    if (!id) return apiError(res, 400, "VALIDATION_ERROR", "Invalid domain id");
+    const { error } = await supabaseAdmin!.from("domains").delete().eq("id", id);
+    if (error) throw error;
+    auditLog("admin.domain.deleted", { actor: (req as AuthedRequest).authUser?.id, domainId: id });
+    res.json({ success: true });
+  } catch (error: any) {
+    apiError(res, 500, "SERVER_ERROR", "Failed to delete domain", error.message);
+  }
+});
+
+app.post("/api/admin/skills", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const parsed = adminSkillSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return apiError(res, 400, "VALIDATION_ERROR", "Invalid skill payload", parsed.error.flatten());
+    }
+
+    const payload = {
+      name: parsed.data.name.trim(),
+      description: parsed.data.description.trim(),
+      domain_id: parsed.data.domain_id || null
+    };
+
+    if (parsed.data.id) {
+      const { error } = await supabaseAdmin!.from("skills").update(payload).eq("id", parsed.data.id);
+      if (error) throw error;
+      auditLog("admin.skill.updated", { actor: (req as AuthedRequest).authUser?.id, skillId: parsed.data.id });
+      return res.json({ id: parsed.data.id });
+    }
+
+    const { data, error } = await supabaseAdmin!.from("skills").insert(payload).select("id").single();
+    if (error) throw error;
+    auditLog("admin.skill.created", { actor: (req as AuthedRequest).authUser?.id, skillId: data.id });
+    res.json({ id: data.id });
+  } catch (error: any) {
+    apiError(res, 500, "SERVER_ERROR", "Failed to save skill", error.message);
+  }
+});
+
+app.delete("/api/admin/skills/:id", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const id = req.params.id;
+    if (!id) return apiError(res, 400, "VALIDATION_ERROR", "Invalid skill id");
+    const { error } = await supabaseAdmin!.from("skills").delete().eq("id", id);
+    if (error) throw error;
+    auditLog("admin.skill.deleted", { actor: (req as AuthedRequest).authUser?.id, skillId: id });
+    res.json({ success: true });
+  } catch (error: any) {
+    apiError(res, 500, "SERVER_ERROR", "Failed to delete skill", error.message);
+  }
+});
+
+app.post("/api/admin/resources", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const parsed = adminResourceSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return apiError(res, 400, "VALIDATION_ERROR", "Invalid resource payload", parsed.error.flatten());
+    }
+
+    const payload = {
+      title: parsed.data.title.trim(),
+      description: parsed.data.description?.trim() || null,
+      url: parsed.data.url.trim(),
+      type: parsed.data.type,
+      difficulty: parsed.data.difficulty,
+      duration: parsed.data.duration?.trim() || null,
+      domain: parsed.data.domain || 'Full Stack',
+      skills_covered: parsed.data.skills_covered || [],
+      updated_at: new Date().toISOString()
+    };
+
+    if (parsed.data.id) {
+      const { error } = await supabaseAdmin!.from("resources").update(payload).eq("id", parsed.data.id);
+      if (error) throw error;
+      auditLog("admin.resource.updated", { actor: (req as AuthedRequest).authUser?.id, resourceId: parsed.data.id });
+      return res.json({ id: parsed.data.id });
+    }
+
+    const { data, error } = await supabaseAdmin!.from("resources").insert({ ...payload, created_at: new Date().toISOString() }).select("id").single();
+    if (error) throw error;
+    auditLog("admin.resource.created", { actor: (req as AuthedRequest).authUser?.id, resourceId: data.id });
+    res.json({ id: data.id });
+  } catch (error: any) {
+    apiError(res, 500, "SERVER_ERROR", "Failed to save resource", error.message);
+  }
+});
+
+app.delete("/api/admin/resources/:id", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const id = req.params.id;
+    if (!id) return apiError(res, 400, "VALIDATION_ERROR", "Invalid resource id");
+    const { error } = await supabaseAdmin!.from("resources").delete().eq("id", id);
+    if (error) throw error;
+    auditLog("admin.resource.deleted", { actor: (req as AuthedRequest).authUser?.id, resourceId: id });
+    res.json({ success: true });
+  } catch (error: any) {
+    apiError(res, 500, "SERVER_ERROR", "Failed to delete resource", error.message);
   }
 });
 

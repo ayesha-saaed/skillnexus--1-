@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, Search } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
+import { supabase, getAccessToken } from '../../lib/supabase';
+import { normalizeText, isDuplicateDbError } from '../../lib/utils';
 import { AdminTable } from './AdminTable';
 import { AdminModal } from './AdminModal';
 import { AdminInput } from './AdminInput';
@@ -76,44 +77,59 @@ export function DomainManagement() {
       return;
     }
 
+    const normalizedName = normalizeText(formData.name);
+    const duplicateDomain = domains.some(
+      (domain) => normalizeText(domain.name) === normalizedName && domain.id !== editingId
+    );
+    if (duplicateDomain) {
+      showToast('Already exists', 'error');
+      return;
+    }
+
     try {
       setLoading(true);
-      if (editingId) {
-        const { error } = await supabase
-          .from('domains')
-          .update({ ...formData, updated_at: new Date().toISOString() })
-          .eq('id', editingId);
+      const token = await getAccessToken();
+      if (!token) throw new Error('Unable to authenticate admin session. Please sign in again.');
 
-        if (error) throw error;
-        showToast('Domain updated successfully', 'success');
-      } else {
-        const now = new Date().toISOString();
-        const row: Record<string, string> = {
-          id: crypto.randomUUID(),
-          name: formData.name.trim(),
-          description: formData.description.trim(),
-          color: formData.color || '#3b82f6',
-          created_at: now,
-          updated_at: now
-        };
-        if (formData.icon?.trim()) row.icon = formData.icon.trim();
-        if (formData.image_url?.trim()) row.image_url = formData.image_url.trim();
-        const { error } = await supabase.from('domains').insert([row]);
-        if (error) throw error;
-        showToast('Domain created successfully', 'success');
+      const payload = {
+        id: editingId || undefined,
+        name: formData.name.trim(),
+        description: formData.description.trim(),
+        icon: formData.icon.trim() || undefined,
+        color: formData.color || '#3b82f6',
+        image_url: formData.image_url.trim() || undefined
+      };
+
+      const response = await fetch('/api/admin/domains', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const responseData = await response.json();
+      if (!response.ok) {
+        throw new Error(responseData?.error?.message || 'Failed to save domain');
       }
 
+      showToast(editingId ? 'Domain updated successfully' : 'Domain created successfully', 'success');
       setIsModalOpen(false);
       resetForm();
       fetchDomains();
     } catch (err: any) {
-      const msg = err?.message || err?.error?.message || 'Failed to save domain';
-      showToast(
-        /row-level security|RLS|policy/i.test(String(msg))
-          ? `${msg} (Run sql/domains_table_align_admin.sql in Supabase, or confirm you are admin.)`
-          : msg,
-        'error'
-      );
+      if (isDuplicateDbError(err)) {
+        showToast('Already exists', 'error');
+      } else {
+        const msg = err?.message || err?.error?.message || 'Failed to save domain';
+        showToast(
+          /row-level security|RLS|policy/i.test(String(msg))
+            ? `${msg} (Run sql/domains_table_align_admin.sql in Supabase, or confirm you are admin.)`
+            : msg,
+          'error'
+        );
+      }
       console.error('Domain save error:', err);
     } finally {
       setLoading(false);
@@ -123,8 +139,19 @@ export function DomainManagement() {
   async function handleDelete(id: string) {
     try {
       setLoading(true);
-      const { error } = await supabase.from('domains').delete().eq('id', id);
-      if (error) throw error;
+      const token = await getAccessToken();
+      if (!token) throw new Error('Unable to authenticate admin session. Please sign in again.');
+
+      const response = await fetch(`/api/admin/domains/${id}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      const responseData = await response.json();
+      if (!response.ok) {
+        throw new Error(responseData?.error?.message || 'Failed to delete domain');
+      }
       showToast('Domain deleted successfully', 'success');
       setIsDeleteConfirmOpen(false);
       fetchDomains();
