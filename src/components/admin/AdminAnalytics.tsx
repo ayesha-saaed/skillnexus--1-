@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Award, BookOpen, Zap, TrendingUp } from 'lucide-react';
+import { Users, Award, BookOpen, Zap, TrendingUp, UserCircle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useToast } from './useToast';
 
@@ -7,7 +7,10 @@ interface Stats {
   totalUsers: number;
   totalAdmins: number;
   totalDomains: number;
-  totalSkills: number;
+  /** Curated taxonomy rows in `public.skills` (admin / domains). */
+  catalogSkills: number;
+  /** Per-user tags from the main app "My Skills" page (`public.user_skills`). */
+  learnerSkillEntries: number;
   totalResources: number;
   activeUsers: number;
 }
@@ -17,7 +20,8 @@ export function AdminAnalytics() {
     totalUsers: 0,
     totalAdmins: 0,
     totalDomains: 0,
-    totalSkills: 0,
+    catalogSkills: 0,
+    learnerSkillEntries: 0,
     totalResources: 0,
     activeUsers: 0
   });
@@ -32,23 +36,37 @@ export function AdminAnalytics() {
     try {
       setLoading(true);
 
-      const [profilesData, domainsData, skillsData, resourcesData] = await Promise.all([
-        supabase.from('profiles').select('*', { count: 'exact', head: true }),
-        supabase.from('domains').select('*', { count: 'exact', head: true }),
-        supabase.from('skills').select('*', { count: 'exact', head: true }),
-        supabase.from('resources').select('*', { count: 'exact', head: true })
-      ]);
+      // `head: true` returns count only — no `data` rows, so do not filter profilesData.data
+      // for role/level. Use separate filtered count queries (or a single select of role/level).
+      const [profilesData, adminCountRes, activeCountRes, domainsData, skillsData, userSkillsData, resourcesData] =
+        await Promise.all([
+          supabase.from('profiles').select('*', { count: 'exact', head: true }),
+          supabase
+            .from('profiles')
+            .select('*', { count: 'exact', head: true })
+            .eq('role', 'admin'),
+          supabase
+            .from('profiles')
+            .select('*', { count: 'exact', head: true })
+            .gt('level', 1),
+          supabase.from('domains').select('*', { count: 'exact', head: true }),
+          supabase.from('skills').select('*', { count: 'exact', head: true }),
+          supabase.from('user_skills').select('*', { count: 'exact', head: true }),
+          supabase.from('resources').select('*', { count: 'exact', head: true })
+        ]);
 
-      const adminCount = profilesData.data?.filter((p: any) => p.role === 'admin').length || 0;
-      const activeCount = profilesData.data?.filter((p: any) => p.level > 1).length || 0;
+      if (userSkillsData.error) {
+        console.warn('user_skills count (admin may need sql/user_skills_admin_rls.sql):', userSkillsData.error.message);
+      }
 
       setStats({
         totalUsers: profilesData.count || 0,
-        totalAdmins: adminCount,
+        totalAdmins: adminCountRes.count || 0,
         totalDomains: domainsData.count || 0,
-        totalSkills: skillsData.count || 0,
+        catalogSkills: skillsData.count || 0,
+        learnerSkillEntries: userSkillsData.error ? 0 : userSkillsData.count ?? 0,
         totalResources: resourcesData.count || 0,
-        activeUsers: activeCount
+        activeUsers: activeCountRes.count || 0
       });
     } catch (err: any) {
       showToast(err.message || 'Failed to fetch stats', 'error');
@@ -95,8 +113,17 @@ export function AdminAnalytics() {
       iconColor: 'text-purple-400'
     },
     {
-      label: 'Total Skills',
-      value: stats.totalSkills,
+      label: 'Learner skills (My Skills)',
+      value: stats.learnerSkillEntries,
+      icon: UserCircle,
+      color: 'amber',
+      bgColor: 'bg-amber-600/20',
+      textColor: 'text-amber-200',
+      iconColor: 'text-amber-400'
+    },
+    {
+      label: 'Curated skills (catalog)',
+      value: stats.catalogSkills,
       icon: Zap,
       color: 'yellow',
       bgColor: 'bg-yellow-600/20',
@@ -157,26 +184,26 @@ export function AdminAnalytics() {
                 <div
                   className="bg-purple-500 h-2 rounded-full"
                   style={{
-                    width: stats.totalDomains > 0 ? `${Math.min((stats.totalSkills / (stats.totalDomains * 10)) * 100, 100)}%` : '0%'
+                    width: stats.totalDomains > 0 ? `${Math.min((stats.catalogSkills / (stats.totalDomains * 10)) * 100, 100)}%` : '0%'
                   }}
                 />
               </div>
               <p className="text-xs text-zinc-500 mt-1">
-                {stats.totalDomains > 0 ? `${(stats.totalSkills / stats.totalDomains).toFixed(1)}` : '0'} skills per domain
+                {stats.totalDomains > 0 ? `${(stats.catalogSkills / stats.totalDomains).toFixed(1)}` : '0'} curated skills per domain
               </p>
             </div>
             <div>
-              <p className="text-xs text-zinc-400 mb-1">Resources per Skill Ratio</p>
+              <p className="text-xs text-zinc-400 mb-1">Resources per Catalog Skill</p>
               <div className="w-full bg-white/5 rounded-full h-2">
                 <div
                   className="bg-green-500 h-2 rounded-full"
                   style={{
-                    width: stats.totalSkills > 0 ? `${Math.min((stats.totalResources / (stats.totalSkills * 5)) * 100, 100)}%` : '0%'
+                    width: stats.catalogSkills > 0 ? `${Math.min((stats.totalResources / (stats.catalogSkills * 5)) * 100, 100)}%` : '0%'
                   }}
                 />
               </div>
               <p className="text-xs text-zinc-500 mt-1">
-                {stats.totalSkills > 0 ? `${(stats.totalResources / stats.totalSkills).toFixed(1)}` : '0'} resources per skill
+                {stats.catalogSkills > 0 ? `${(stats.totalResources / stats.catalogSkills).toFixed(1)}` : '0'} resources per catalog skill
               </p>
             </div>
           </div>
@@ -194,10 +221,12 @@ export function AdminAnalytics() {
             </div>
             <div className="bg-white/5 rounded-lg p-4">
               <div className="flex items-center justify-between mb-2">
-                <p className="text-sm text-zinc-300">Skill Coverage</p>
-                <p className="text-lg font-black text-purple-400">{stats.totalSkills}</p>
+                <p className="text-sm text-zinc-300">Learner + catalog</p>
+                <p className="text-lg font-black text-purple-400">
+                  {stats.learnerSkillEntries} / {stats.catalogSkills}
+                </p>
               </div>
-              <p className="text-xs text-zinc-500">Skills available for learning</p>
+              <p className="text-xs text-zinc-500">User tags (My Skills) / curated catalog rows</p>
             </div>
             <div className="bg-white/5 rounded-lg p-4">
               <div className="flex items-center justify-between mb-2">
@@ -223,15 +252,15 @@ export function AdminAnalytics() {
           </div>
           <div className="text-center">
             <p className="text-2xl font-black text-purple-400">
-              {stats.totalDomains > 0 ? (stats.totalSkills / stats.totalDomains).toFixed(1) : '0'}
+              {stats.totalDomains > 0 ? (stats.catalogSkills / stats.totalDomains).toFixed(1) : '0'}
             </p>
-            <p className="text-xs text-zinc-400 mt-1">Avg Skills/Domain</p>
+            <p className="text-xs text-zinc-400 mt-1">Avg catalog skills / domain</p>
           </div>
           <div className="text-center">
             <p className="text-2xl font-black text-yellow-400">
-              {stats.totalSkills > 0 ? (stats.totalResources / stats.totalSkills).toFixed(1) : '0'}
+              {stats.catalogSkills > 0 ? (stats.totalResources / stats.catalogSkills).toFixed(1) : '0'}
             </p>
-            <p className="text-xs text-zinc-400 mt-1">Avg Resources/Skill</p>
+            <p className="text-xs text-zinc-400 mt-1">Avg resources / catalog skill</p>
           </div>
         </div>
       </div>

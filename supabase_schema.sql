@@ -172,6 +172,25 @@ drop policy if exists "skill events owner read/write" on public.skill_developmen
 create policy "skill events owner read/write" on public.skill_development_events
 for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
+-- Admins: read all user_skills / skill events (admin dashboard; see also sql/user_skills_admin_rls.sql)
+drop policy if exists "user_skills admin read" on public.user_skills;
+create policy "user_skills admin read" on public.user_skills
+for select using (
+  exists (
+    select 1 from public.profiles
+    where profiles.id = auth.uid() and profiles.role = 'admin'
+  )
+);
+
+drop policy if exists "skill_development_events admin read" on public.skill_development_events;
+create policy "skill_development_events admin read" on public.skill_development_events
+for select using (
+  exists (
+    select 1 from public.profiles
+    where profiles.id = auth.uid() and profiles.role = 'admin'
+  )
+);
+
 -- Target job role / active path (Gap Checker selection)
 alter table public.profiles add column if not exists active_job_role_id uuid;
 alter table public.profiles add column if not exists active_job_role_name text;

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, Search } from 'lucide-react';
+import { Plus, Edit2, Trash2, Search, Info } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { AdminTable } from './AdminTable';
 import { AdminModal } from './AdminModal';
@@ -11,8 +11,8 @@ interface Skill {
   id: string;
   name: string;
   description: string;
-  domain_id: string;
-  domain?: { name: string };
+  domain_id: string | null;
+  domain?: { name: string } | null;
   created_at: string;
 }
 
@@ -21,10 +21,21 @@ interface Domain {
   name: string;
 }
 
+interface LearnerSkillRow {
+  id: string;
+  skill_name: string;
+  proficiency: string;
+  updated_at: string;
+  user_id: string;
+  profiles?: { name: string | null; email: string | null } | null;
+}
+
 export function SkillManagement() {
   const [skills, setSkills] = useState<Skill[]>([]);
+  const [learnerSkills, setLearnerSkills] = useState<LearnerSkillRow[]>([]);
   const [domains, setDomains] = useState<Domain[]>([]);
   const [loading, setLoading] = useState(true);
+  const [learnerLoading, setLearnerLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -39,8 +50,27 @@ export function SkillManagement() {
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    Promise.all([fetchSkills(), fetchDomains()]);
+    void Promise.all([fetchSkills(), fetchDomains(), fetchLearnerSkills()]);
   }, []);
+
+  async function fetchLearnerSkills() {
+    try {
+      setLearnerLoading(true);
+      const { data, error } = await supabase
+        .from('user_skills')
+        .select('id, skill_name, proficiency, updated_at, user_id, profiles(name, email)')
+        .order('updated_at', { ascending: false });
+      if (error) throw error;
+      setLearnerSkills((data as LearnerSkillRow[]) || []);
+    } catch (err: any) {
+      showToast(
+        err.message || 'Failed to load learner skills. Run sql/user_skills_admin_rls.sql in Supabase if you are admin.',
+        'error'
+      );
+    } finally {
+      setLearnerLoading(false);
+    }
+  }
 
   async function fetchSkills() {
     try {
@@ -68,40 +98,57 @@ export function SkillManagement() {
     }
   }
 
-  function validateForm() {
+  function validateForm(): string | null {
     const newErrors: Record<string, string> = {};
     if (!formData.name.trim()) newErrors.name = 'Skill name is required';
-    if (formData.name.length < 2) newErrors.name = 'Name must be at least 2 characters';
+    if (formData.name.trim().length < 2) newErrors.name = 'Name must be at least 2 characters';
     if (!formData.description.trim()) newErrors.description = 'Description is required';
-    if (!formData.domain_id) newErrors.domain_id = 'Please select a domain';
+    // domain_id is optional: lets you add catalog skills before any domains exist in the DB
     setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    if (Object.keys(newErrors).length) return Object.values(newErrors)[0];
+    return null;
+  }
+
+  function skillPayload() {
+    const name = formData.name.trim();
+    const description = formData.description.trim();
+    const domain_id = formData.domain_id.trim() || null;
+    return { name, description, domain_id };
   }
 
   async function handleSave() {
-    if (!validateForm()) return;
+    const v = validateForm();
+    if (v) {
+      showToast(v, 'error');
+      return;
+    }
 
     try {
       setLoading(true);
+      const row = skillPayload();
       if (editingId) {
-        const { error } = await supabase
-          .from('skills')
-          .update(formData)
-          .eq('id', editingId);
+        const { error } = await supabase.from('skills').update(row as any).eq('id', editingId);
 
         if (error) throw error;
         showToast('Skill updated successfully', 'success');
       } else {
-        const { error } = await supabase.from('skills').insert([formData]);
+        const { error } = await supabase.from('skills').insert([row] as any);
         if (error) throw error;
         showToast('Skill created successfully', 'success');
       }
 
       setIsModalOpen(false);
       resetForm();
-      fetchSkills();
+      void fetchSkills();
     } catch (err: any) {
-      showToast(err.message || 'Failed to save skill', 'error');
+      const msg = err?.message || err?.error?.message || 'Failed to save skill';
+      showToast(
+        /row-level security|RLS|policy|not-null|null value in column "domain_id"/i.test(String(msg))
+          ? `${msg} (If domain is required in your DB, run: ALTER TABLE public.skills ALTER COLUMN domain_id DROP NOT NULL; or add a domain first.)`
+          : msg,
+        'error'
+      );
+      console.error('Skill save error:', err);
     } finally {
       setLoading(false);
     }
@@ -132,7 +179,7 @@ export function SkillManagement() {
     setFormData({
       name: skill.name,
       description: skill.description,
-      domain_id: skill.domain_id
+      domain_id: skill.domain_id || ''
     });
     setEditingId(skill.id);
     setIsModalOpen(true);
@@ -145,6 +192,48 @@ export function SkillManagement() {
 
   return (
     <div className="space-y-6">
+      <div className="flex gap-2 items-start p-3 rounded-lg border border-blue-500/20 bg-blue-500/5 text-zinc-300 text-xs">
+        <Info className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
+        <p>
+          <span className="text-zinc-200 font-medium">My Skills (app)</span> saves to the{' '}
+          <code className="text-zinc-400">user_skills</code> table.{' '}
+          <span className="text-zinc-200 font-medium">Curated catalog</span> uses the <code className="text-zinc-400">skills</code> table. Domain is
+          optional: you can save a skill with &quot;Unassigned&quot; even before the Domains table is filled.
+        </p>
+      </div>
+
+      <div>
+        <h2 className="text-sm font-bold text-white uppercase tracking-widest mb-3">Learner skills (My Skills page)</h2>
+        <AdminTable<LearnerSkillRow>
+          data={learnerSkills}
+          columns={[
+            { header: 'Skill', key: 'skill_name', sortable: true },
+            { header: 'Level', key: 'proficiency' },
+            {
+              header: 'User',
+              key: 'user_id',
+              render: (_v, row) => (
+                <div className="text-xs">
+                  <div className="text-white">{row.profiles?.name || '—'}</div>
+                  <div className="text-zinc-500">{row.profiles?.email || row.user_id.slice(0, 8)}…</div>
+                </div>
+              )
+            },
+            {
+              header: 'Updated',
+              key: 'updated_at',
+              render: (value) => new Date(value as string).toLocaleString()
+            }
+          ]}
+          loading={learnerLoading}
+          emptyMessage="No learner skills yet, or admin cannot read user_skills (apply RLS SQL)."
+        />
+      </div>
+
+      <div className="pt-2 border-t border-white/10">
+        <h2 className="text-sm font-bold text-white uppercase tracking-widest mb-3">Curated skills catalog</h2>
+      </div>
+
       <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
         <div className="flex-1 max-w-md">
           <div className="relative">
@@ -178,7 +267,7 @@ export function SkillManagement() {
           {
             header: 'Domain',
             key: 'domain_id',
-            render: (_, skill) => skill.domain?.name || 'Unknown'
+            render: (_, skill) => skill.domain?.name || (skill.domain_id ? '—' : 'Unassigned')
           },
           {
             header: 'Description',
@@ -234,14 +323,18 @@ export function SkillManagement() {
           error={errors.name}
           required
         />
+        {domains.length === 0 && (
+          <p className="text-xs text-amber-200/90 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+            No domains loaded yet. Leave Domain as Unassigned, or set up the Domains tab + database first and refresh.
+          </p>
+        )}
         <AdminSelect
-          label="Domain"
+          label="Domain (optional)"
           value={formData.domain_id}
           onChange={(value) => setFormData({ ...formData, domain_id: value })}
           options={domains.map((d) => ({ value: d.id, label: d.name }))}
-          placeholder="Select a domain"
+          placeholder="Unassigned (optional — add domains later)"
           error={errors.domain_id}
-          required
         />
         <AdminInput
           label="Description"

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getCurrentUser, supabase } from '../../lib/supabase';
-import { ShieldAlert, BarChart3, Database, Users, Briefcase, PackageOpen, LogOut } from 'lucide-react';
+import { ShieldAlert, BarChart3, Database, Users, Briefcase, PackageOpen, LogOut, ArrowLeft } from 'lucide-react';
 import { motion } from 'motion/react';
 import { AdminAnalytics } from './AdminAnalytics';
 import { DomainManagement } from './DomainManagement';
@@ -100,13 +100,24 @@ export function AdminDashboard({ onNavigate }: AdminDashboardProps) {
               </div>
             </div>
 
-            <button
-              onClick={handleLogout}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-white/5 border border-white/10 text-sm font-medium text-zinc-300 transition-colors"
-            >
-              <LogOut className="w-4 h-4" />
-              Logout
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => onNavigate('dashboard')}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-white/5 border border-white/10 text-sm font-medium text-zinc-200 transition-colors"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                Back to app
+              </button>
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-white/5 border border-white/10 text-sm font-medium text-zinc-300 transition-colors"
+              >
+                <LogOut className="w-4 h-4" />
+                Logout
+              </button>
+            </div>
           </div>
         </div>
       </div>

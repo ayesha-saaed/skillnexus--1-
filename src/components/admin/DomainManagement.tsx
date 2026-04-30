@@ -57,17 +57,24 @@ export function DomainManagement() {
     }
   }
 
-  function validateForm() {
+  function validateForm(): string | null {
     const newErrors: Record<string, string> = {};
     if (!formData.name.trim()) newErrors.name = 'Domain name is required';
-    if (formData.name.length < 3) newErrors.name = 'Name must be at least 3 characters';
+    if (formData.name.trim().length < 2) newErrors.name = 'Name must be at least 2 characters';
     if (!formData.description.trim()) newErrors.description = 'Description is required';
     setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    if (Object.keys(newErrors).length) {
+      return Object.values(newErrors)[0];
+    }
+    return null;
   }
 
   async function handleSave() {
-    if (!validateForm()) return;
+    const validationError = validateForm();
+    if (validationError) {
+      showToast(validationError, 'error');
+      return;
+    }
 
     try {
       setLoading(true);
@@ -80,7 +87,18 @@ export function DomainManagement() {
         if (error) throw error;
         showToast('Domain updated successfully', 'success');
       } else {
-        const { error } = await supabase.from('domains').insert([formData]);
+        const now = new Date().toISOString();
+        const row: Record<string, string> = {
+          id: crypto.randomUUID(),
+          name: formData.name.trim(),
+          description: formData.description.trim(),
+          color: formData.color || '#3b82f6',
+          created_at: now,
+          updated_at: now
+        };
+        if (formData.icon?.trim()) row.icon = formData.icon.trim();
+        if (formData.image_url?.trim()) row.image_url = formData.image_url.trim();
+        const { error } = await supabase.from('domains').insert([row]);
         if (error) throw error;
         showToast('Domain created successfully', 'success');
       }
@@ -89,7 +107,14 @@ export function DomainManagement() {
       resetForm();
       fetchDomains();
     } catch (err: any) {
-      showToast(err.message || 'Failed to save domain', 'error');
+      const msg = err?.message || err?.error?.message || 'Failed to save domain';
+      showToast(
+        /row-level security|RLS|policy/i.test(String(msg))
+          ? `${msg} (Run sql/domains_table_align_admin.sql in Supabase, or confirm you are admin.)`
+          : msg,
+        'error'
+      );
+      console.error('Domain save error:', err);
     } finally {
       setLoading(false);
     }
