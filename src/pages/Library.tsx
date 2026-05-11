@@ -4,11 +4,12 @@ import {
   Book, CheckCircle, ExternalLink, GraduationCap, PlayCircle, 
   Trophy, Zap, Clock, Star, 
   Code2, ShieldCheck, BarChart3, Cloud, Lock, Smartphone, 
-  Palette, ChevronRight, Layers, LayoutGrid, ShieldAlert
+  Palette, ChevronRight, Layers, LayoutGrid, ShieldAlert, Sparkles
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { learningService, Progress } from '../services/learningService';
 import { gamificationService } from '../services/gamificationService';
+import { getCurrentUser } from '../lib/firebase';
 
 interface Resource {
   id: string;
@@ -73,15 +74,21 @@ export function Library({ onNavigate }: LibraryProps) {
   ];
 
   useEffect(() => {
-    // Static resources loaded
-    // Load progress if available
-    learningService.getUserProgress().then(progData => {
-      const progMap: Record<string, Progress> = {};
-      progData.forEach((p: any) => {
-        progMap[p.resourceId] = p;
-      });
-      setProgress(progMap);
-    }).catch(console.error);
+    const loadProgress = async () => {
+      try {
+        const user = await getCurrentUser();
+        if (!user) return;
+        const progData = await learningService.getUserProgress(user.id);
+        const progMap: Record<string, Progress> = {};
+        progData.forEach((p) => {
+          progMap[p.resourceId] = p;
+        });
+        setProgress(progMap);
+      } catch (error) {
+        console.error('Failed to load progress:', error);
+      }
+    };
+    loadProgress();
   }, []);
 
 

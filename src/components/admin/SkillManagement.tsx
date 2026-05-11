@@ -62,7 +62,15 @@ export function SkillManagement() {
         .select('id, skill_name, proficiency, updated_at, user_id, profiles(name, email)')
         .order('updated_at', { ascending: false });
       if (error) throw error;
-      setLearnerSkills((data as LearnerSkillRow[]) || []);
+      const normalizedData = (data || []).map((row: any): LearnerSkillRow => ({
+        id: row.id,
+        skill_name: row.skill_name,
+        proficiency: row.proficiency,
+        updated_at: row.updated_at,
+        user_id: row.user_id,
+        profiles: Array.isArray(row.profiles) ? row.profiles[0] : row.profiles || null
+      }));
+      setLearnerSkills(normalizedData);
     } catch (err: any) {
       showToast(
         err.message || 'Failed to load learner skills. Run sql/user_skills_admin_rls.sql in Supabase if you are admin.',

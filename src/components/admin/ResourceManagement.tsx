@@ -7,19 +7,9 @@ import { AdminModal } from './AdminModal';
 import { AdminInput } from './AdminInput';
 import { AdminSelect } from './AdminSelect';
 import { useToast } from './useToast';
+import type { ResourceRow } from '../../types/database';
 
-interface Resource {
-  id: string;
-  title: string;
-  description: string;
-  url: string;
-  type: string;
-  difficulty: string;
-  duration: string;
-  skills_covered?: string[];
-  domain?: string;
-  created_at: string;
-}
+interface Resource extends ResourceRow {}
 
 interface Skill {
   id: string;

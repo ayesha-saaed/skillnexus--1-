@@ -1,4 +1,4 @@
-// import { Resource } from '../../pages/Library'; // Removed circular import - type defined locally
+import type { Resource } from '../types/database';
 
 export const resources: Resource[] = [
   {

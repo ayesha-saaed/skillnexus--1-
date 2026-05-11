@@ -1,12 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { GoogleGenAI } from "@google/genai";
-import { MessageSquare, X, Send, Bot, User, Sparkles, Loader2, TrendingUp, Calendar, Map } from 'lucide-react';
+import { MessageSquare, X, Send, Bot, User, Loader2, TrendingUp, Calendar, Map } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { User as FirebaseUser, supabase } from '../lib/firebase';
-
-const apiKey = (import.meta as any).env?.VITE_GEMINI_API_KEY || (process as any).env?.GEMINI_API_KEY;
-const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
-const aiEnabled = Boolean(ai);
+import type { User as FirebaseUser } from '../lib/firebase';
+import { supabase } from '../lib/firebase';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -35,7 +31,7 @@ export function SkillAgent({ user }: SkillAgentProps) {
         const skills = (data || []).map((doc: any) => doc.skill_name);
         setUserSkills(skills);
       } catch (err) {
-        console.error("Agent failed to fetch skills context:", err);
+        console.error('Agent failed to fetch skills context:', err);
       }
     };
     if (user) fetchUserSkills();
@@ -49,63 +45,42 @@ export function SkillAgent({ user }: SkillAgentProps) {
 
   const handleSendMessage = async () => {
     if (!input.trim() || loading) return;
-    if (!aiEnabled) {
-      setMessages(prev => [...prev, { role: 'assistant', content: "AI agent unavailable: Gemini API key is not configured. Please set VITE_GEMINI_API_KEY in your environment or disable the chat feature." }]);
-      return;
-    }
-
     const userMessage = input.trim();
     setInput('');
     setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
     setLoading(true);
 
+    const payload = {
+      prompt: userMessage,
+      context: `Current user skills: ${userSkills.join(', ') || 'none'}`,
+      userSkills
+    };
+
     try {
-      // Build prompt context
-      const systemInstruction = `
-        You are the "SkillNexus Intelligence Agent", a sophisticated career strategist and tech industry oracle.
-        Your primary directive is to decode career paths for user ${user.user_metadata?.full_name || user.email || 'Nexus Scholar'} with surgical precision.
-        
-        USER CURRENT SKILLS: [${userSkills.join(', ') || 'No skills added yet'}]
-
-        You specialize in:
-        1. **Domain Deep-Dives**: Detailed breakdowns of Frontend, Backend, AI/ML, DevOps, CyberSec, etc.
-        2. **Market Trend Analysis**: Using platform demand scoring (0-1) and growth visualizations to explain which skills are "Hot" vs "Stable". 
-           - Mention that AI/ML (Generative AI) and DevOps (Kubernetes/Kubernetes) currently lead with the highest trend scores (>0.95).
-        3. **Timeline Projections**: Estimate realistic durations to move from 'Beginner' to 'Industry Ready'. 
-           - Junior Path: 6-12 months.
-           - Senior Mastery: 3-5 years.
-           
-        Tone: Brutalist, high-intelligence, yet encouraging. Use tech-forward vocabulary (e.g., "Knowledge Clusters", "Intelligence Gaps", "Growth Vectors").
-        
-        Limit responses to under 150 words unless the user asks for a deep roadmap.
-      `;
-
-      if (!ai) throw new Error('AI not initialized');
-      const response = await ai.models.generateContent({
-        model: "gemini-2.0-flash-exp",
-        contents: [
-          ...messages.map(m => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] })),
-          { role: 'user', parts: [{ text: userMessage }] }
-        ],
-        config: {
-          systemInstruction: systemInstruction,
-        },
+      const response = await fetch('/api/ai/skill-agent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
       });
 
-      const assistantMessage = response.text || "I'm sorry, I couldn't process that request.";
-      setMessages(prev => [...prev, { role: 'assistant', content: assistantMessage }]);
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result?.error?.message || 'AI service error');
+      }
+
+      setMessages(prev => [...prev, { role: 'assistant', content: result.answer || 'I could not generate a response.' }]);
     } catch (error) {
-      console.error("AI Agent Error:", error);
-      setMessages(prev => [...prev, { role: 'assistant', content: "Connection to Nexus Intelligence interrupted. Please try again." }]);
+      console.error('AI Agent Error:', error);
+      setMessages(prev => [...prev, { role: 'assistant', content: 'Connection to Nexus Intelligence interrupted. Please try again.' }]);
     } finally {
       setLoading(false);
     }
   };
 
   const suggestions = [
-    { text: "What are the top AI trends in 2026?", icon: TrendingUp },
-    { text: "How long to become a Full Stack Dev?", icon: Calendar },
-    { text: "Compare Frontend vs Backend demand", icon: Map },
+    { text: 'What are the top AI trends in 2026?', icon: TrendingUp },
+    { text: 'How long to become a Full Stack Dev?', icon: Calendar },
+    { text: 'Compare Frontend vs Backend demand', icon: Map }
   ];
 
   return (

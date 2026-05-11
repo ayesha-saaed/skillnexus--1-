@@ -8,8 +8,10 @@ import natural from "natural";
 import dotenv from "dotenv";
 import axios from "axios";
 import { z } from "zod";
+import { GoogleGenAI } from "@google/genai";
 import { MASTER_SKILLS, SYNONYMS, JOB_ROLES, INDUSTRY_DEMAND, LEARNING_RESOURCES } from "./src/lib/knowledge_base";
 import { INDUSTRY_DEMAND_HISTORICAL, CURATED_RESOURCES } from "./src/lib/data_seeder";
+import { normalizeSkill } from "./src/lib/skillNormalization";
 
 dotenv.config();
 
@@ -62,6 +64,12 @@ const linkedInCallbackSchema = z.object({
   error_description: z.string().optional()
 });
 
+const aiRequestSchema = z.object({
+  prompt: z.string().min(1).max(1600),
+  context: z.string().max(1200).optional(),
+  userSkills: z.array(z.string()).optional().default([])
+});
+
 const getBearerToken = (req: express.Request) => {
   const header = req.headers.authorization || "";
   if (!header.toLowerCase().startsWith("bearer ")) return null;
@@ -98,20 +106,70 @@ const requireAdmin: express.RequestHandler = async (req, res, next) => {
   next();
 };
 
-// --- NLP & Semantic Logic ---
+const aiApiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || null;
+const aiModel = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
+const aiClient = aiApiKey ? new GoogleGenAI({ apiKey: aiApiKey }) : null;
 
-const normalizeSkill = (skillName: string) => {
-  const lower = skillName.toLowerCase().trim();
-  for (const item of SYNONYMS) {
-    if (
-      item.skill.toLowerCase() === lower ||
-      item.synonyms.some(s => s.toLowerCase() === lower)
-    ) {
-      return item.skill; // Return canonical name
+const rateLimiter = (limit: number, windowMs: number): express.RequestHandler => {
+  const store = new Map<string, { count: number; resetAt: number }>();
+  return (req, res, next) => {
+    const key = (req.headers['x-forwarded-for'] as string || req.ip || 'anonymous').split(',')[0].trim();
+    const now = Date.now();
+    const entry = store.get(key);
+    if (!entry || entry.resetAt <= now) {
+      store.set(key, { count: 1, resetAt: now + windowMs });
+      return next();
     }
-  }
-  return skillName;
+    if (entry.count >= limit) {
+      return apiError(res, 429, 'FORBIDDEN', 'Rate limit exceeded', { retryAfterMs: entry.resetAt - now });
+    }
+    entry.count += 1;
+    return next();
+  };
 };
+
+app.post('/api/ai/skill-agent', requireAuth, rateLimiter(12, 60_000), async (req, res) => {
+  if (!aiClient) return apiError(res, 500, 'SERVER_ERROR', 'AI service not configured');
+  const parsed = aiRequestSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return apiError(res, 400, 'VALIDATION_ERROR', 'Invalid AI request payload', parsed.error.flatten());
+  }
+
+  const prompt = [
+    'You are a trusted career intelligence assistant for SkillNexus. Provide concise, actionable guidance, highlight high-demand skills, and keep recommendations grounded in evidence and safe best practices.',
+    parsed.data.context || '',
+    `Current user skills: ${parsed.data.userSkills.join(', ') || 'none'}`,
+    parsed.data.prompt.trim()
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+
+  try {
+    const response = await aiClient.models.generateContent({
+      model: aiModel,
+      contents: [
+        {
+          role: 'user',
+          parts: [{ text: prompt }]
+        }
+      ],
+      config: {
+        temperature: 0.35,
+        maxOutputTokens: 512,
+        topP: 0.9
+      }
+    });
+
+    const answer = (response as any).text || (response as any)?.output?.[0]?.content?.[0]?.text || 'I could not generate an answer at this time.';
+    auditLog('ai.skill-agent', { userId: (req as AuthedRequest).authUser?.id, prompt: parsed.data.prompt.slice(0, 200) });
+    return res.json({ answer });
+  } catch (error: any) {
+    auditLog('ai.skill-agent.error', { message: error?.message || 'Unknown AI error' });
+    return apiError(res, 500, 'SERVER_ERROR', 'AI request failed', error?.message);
+  }
+});
+
+// --- NLP & Semantic Logic ---
 
 function calculateCosineSimilarity(vec1: number[], vec2: number[]) {
   const dotProduct = vec1.reduce((sum, val, i) => sum + val * (vec2[i] || 0), 0);

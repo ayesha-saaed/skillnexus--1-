@@ -1,15 +1,7 @@
 import { supabase } from '../lib/supabase';
+import type { Progress as ProgressType, ProgressRow } from '../types/database';
 
-
-export interface Progress {
-  user_id: string;
-  resource_id: string;
-  status: 'Not Started' | 'In Progress' | 'Completed';
-  progress: number;
-  time_spent: number;
-  last_updated: any;
-  [key: string]: any;
-}
+export interface Progress extends ProgressType {}
 
 export const learningService = {
   /**
@@ -42,15 +34,15 @@ export const learningService = {
    * Fetches user progress for all resources.
    */
   async getUserProgress(userId: string) {
-    const { data, error } = await supabase.from('progress').select('*').eq('user_id', userId);
+    const { data, error } = await supabase.from<ProgressRow>('progress').select('*').eq('user_id', userId);
     if (error) throw error;
-    return (data || []).map((row: any) => ({
+    return (data || []).map((row) => ({
       ...row,
       userId: row.user_id,
       resourceId: row.resource_id,
-      time_spent: row.time_spent,
+      timeSpent: row.time_spent,
       lastUpdated: row.last_updated
-    }));
+    })) as ProgressType[];
   },
 
   /**
