@@ -2,7 +2,6 @@ import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
-import admin from "firebase-admin";
 import { createClient } from "@supabase/supabase-js";
 import natural from "natural";
 import dotenv from "dotenv";
@@ -58,17 +57,22 @@ const recommendationsQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).optional()
 });
 
-const linkedInCallbackSchema = z.object({
-  code: z.string().optional(),
-  error: z.string().optional(),
-  error_description: z.string().optional()
-});
-
 const aiRequestSchema = z.object({
   prompt: z.string().min(1).max(1600),
   context: z.string().max(1200).optional(),
   userSkills: z.array(z.string()).optional().default([])
 });
+
+// Content safety check for AI prompts
+const containsHarmfulContent = (text: string): boolean => {
+  const harmfulPatterns = [
+    /\b(hack|exploit|attack|malware|virus|trojan|phish|scam|fraud)\b/i,
+    /\b(illegal|criminal|terrorist|violent|harm|kill|suicide)\b/i,
+    /\b(drug|weapon|nuclear|bomb|explosive)\b/i,
+    /\b(personal|private|confidential|secret).*(data|information|details)/i
+  ];
+  return harmfulPatterns.some(pattern => pattern.test(text));
+};
 
 const getBearerToken = (req: express.Request) => {
   const header = req.headers.authorization || "";
@@ -135,14 +139,22 @@ app.post('/api/ai/skill-agent', requireAuth, rateLimiter(12, 60_000), async (req
     return apiError(res, 400, 'VALIDATION_ERROR', 'Invalid AI request payload', parsed.error.flatten());
   }
 
-  const prompt = [
-    'You are a trusted career intelligence assistant for SkillNexus. Provide concise, actionable guidance, highlight high-demand skills, and keep recommendations grounded in evidence and safe best practices.',
+  // Content safety check
+  const fullPrompt = [
     parsed.data.context || '',
     `Current user skills: ${parsed.data.userSkills.join(', ') || 'none'}`,
     parsed.data.prompt.trim()
-  ]
-    .filter(Boolean)
-    .join('\n\n');
+  ].filter(Boolean).join('\n\n');
+
+  if (containsHarmfulContent(fullPrompt)) {
+    auditLog('ai.skill-agent.blocked', { userId: (req as AuthedRequest).authUser?.id, reason: 'harmful_content' });
+    return apiError(res, 400, 'VALIDATION_ERROR', 'Request contains inappropriate content');
+  }
+
+  const prompt = [
+    'You are a trusted career intelligence assistant for SkillNexus. Provide concise, actionable guidance, highlight high-demand skills, and keep recommendations grounded in evidence and safe best practices.',
+    fullPrompt
+  ].join('\n\n');
 
   try {
     const response = await aiClient.models.generateContent({
@@ -391,125 +403,6 @@ function inferSkillsFromCareerSummary(summary: string) {
   return Array.from(candidates.entries()).map(([name, proficiencyLevel]) => ({ skillName: name, proficiencyLevel }));
 }
 
-// --- LinkedIn OAuth ---
-
-const getLinkedInRedirectUri = () => {
-  // Use the development URL provided by the environment or a fallback
-  const appUrl = process.env.VITE_APP_URL || `https://${process.env.PROJECT_ID}.asia-southeast1.run.app`;
-  return `${appUrl}/api/auth/linkedin/callback`;
-};
-
-app.get("/api/auth/linkedin/url", (req, res) => {
-  const clientId = process.env.LINKEDIN_CLIENT_ID;
-  if (!clientId) {
-    return res.status(500).json({ error: "LinkedIn Client ID not configured" });
-  }
-
-  const redirectUri = getLinkedInRedirectUri();
-  const state = Math.random().toString(36).substring(7);
-  
-  const authUrl = `https://www.linkedin.com/oauth/v2/authorization?response_type=code&client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}&scope=openid%20profile%20email`;
-  
-  res.json({ url: authUrl });
-});
-
-app.get("/api/auth/linkedin/callback", async (req, res) => {
-  const parsed = linkedInCallbackSchema.safeParse(req.query);
-  if (!parsed.success) {
-    return apiError(res, 400, "VALIDATION_ERROR", "Invalid LinkedIn callback query", parsed.error.flatten());
-  }
-  const { code, error, error_description } = parsed.data;
-
-  if (error) {
-    return res.send(`
-      <html>
-        <body>
-          <script>
-            window.opener.postMessage({ type: 'LINKEDIN_AUTH_ERROR', error: '${error_description || error}' }, '*');
-            window.close();
-          </script>
-        </body>
-      </html>
-    `);
-  }
-
-  try {
-    const clientId = process.env.LINKEDIN_CLIENT_ID;
-    const clientSecret = process.env.LINKEDIN_CLIENT_SECRET;
-    const redirectUri = getLinkedInRedirectUri();
-
-    // 1. Exchange code for access token
-    const tokenResponse = await axios.post("https://www.linkedin.com/oauth/v2/accessToken", null, {
-      params: {
-        grant_type: "authorization_code",
-        code,
-        client_id: clientId,
-        client_secret: clientSecret,
-        redirect_uri: redirectUri,
-      },
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-    });
-
-    const accessToken = tokenResponse.data.access_token;
-
-    // 2. Get user info
-    const userResponse = await axios.get("https://api.linkedin.com/v2/userinfo", {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
-    });
-
-    const linkedinUser = userResponse.data; // { sub, name, given_name, family_name, picture, email, email_verified }
-    const email = linkedinUser.email;
-    const uid = `linkedin:${linkedinUser.sub}`;
-
-    // 3. Create or update user in Firebase
-    let firebaseUser;
-    try {
-      firebaseUser = await admin.auth().getUser(uid);
-    } catch (e) {
-      firebaseUser = await admin.auth().createUser({
-        uid,
-        email,
-        displayName: linkedinUser.name,
-        photoURL: linkedinUser.picture,
-      });
-    }
-
-    // Note: LinkedIn path currently issues Firebase custom tokens only.
-    // Supabase social auth should be preferred for production login flows.
-
-    // 4. Generate custom token
-    const customToken = await admin.auth().createCustomToken(uid);
-
-    res.send(`
-      <html>
-        <body>
-          <script>
-            window.opener.postMessage({ type: 'LINKEDIN_AUTH_SUCCESS', token: '${customToken}' }, '*');
-            window.close();
-          </script>
-          <p>Authentication successful. Closing window...</p>
-        </body>
-      </html>
-    `);
-  } catch (err: any) {
-    console.error("LinkedIn OAuth error:", err.response?.data || err.message);
-    res.send(`
-      <html>
-        <body>
-          <script>
-            window.opener.postMessage({ type: 'LINKEDIN_AUTH_ERROR', error: 'Failed to exchange token' }, '*');
-            window.close();
-          </script>
-        </body>
-      </html>
-    `);
-  }
-});
-
 // --- API Endpoints ---
 
 const analyzeSchema = z.object({
@@ -649,20 +542,28 @@ app.get("/api/industry-trends", async (req, res) => {
 
 app.get("/api/job-roles", requireAuth, async (req, res) => {
   try {
-    let { data: roles, error } = await supabaseAdmin!.from("job_roles").select("*").order("role_name");
-    if (error) throw error;
+    const defaultRoles = getDefaultRoleRows();
+    if (defaultRoles.length) {
+      const { data: existingRoles, error: existingError } = await supabaseAdmin!
+        .from("job_roles")
+        .select("role_name");
+      if (existingError) throw existingError;
 
-    // Fresh DB fallback: bootstrap default roles automatically.
-    if (!roles || roles.length === 0) {
-      const roleRows = getDefaultRoleRows();
-      if (roleRows.length) {
-        const { error: upsertErr } = await supabaseAdmin!.from("job_roles").upsert(roleRows, { onConflict: "role_name" });
-        if (upsertErr) throw upsertErr;
+      const existingNames = new Set(
+        (existingRoles || []).map((row: any) => String(row.role_name || '').trim().toLowerCase())
+      );
+      const missingRoles = defaultRoles.filter(
+        (role) => !existingNames.has(String(role.role_name || '').trim().toLowerCase())
+      );
+
+      if (missingRoles.length) {
+        const { error: insertError } = await supabaseAdmin!.from("job_roles").insert(missingRoles);
+        if (insertError) throw insertError;
       }
-      const refetch = await supabaseAdmin!.from("job_roles").select("*").order("role_name");
-      if (refetch.error) throw refetch.error;
-      roles = refetch.data || [];
     }
+
+    const { data: roles, error } = await supabaseAdmin!.from("job_roles").select("*").order("role_name");
+    if (error) throw error;
 
     return res.json(roles || []);
   } catch (error: any) {
@@ -732,7 +633,10 @@ app.post("/api/admin/seed", requireAuth, requireAdmin, async (req, res) => {
 });
 
 const adminRoleSchema = z.object({
+  id: z.string().uuid().optional(),
   title: z.string().min(2),
+  domain: z.string().min(1).default('Custom'),
+  difficulty: z.string().min(1).default('Intermediate'),
   requiredSkills: z.array(z.string()).default([])
 });
 
@@ -770,18 +674,42 @@ app.post("/api/admin/roles", requireAuth, requireAdmin, async (req, res) => {
     if (!parsed.success) {
       return apiError(res, 400, "VALIDATION_ERROR", "Invalid role payload", parsed.error.flatten());
     }
-    const { title, requiredSkills } = parsed.data;
-    const { data, error } = await supabaseAdmin!.from("job_roles").insert({
-      role_name: title,
-      required_skills: requiredSkills || [],
-      domain: "Custom",
-      difficulty: "Intermediate"
-    }).select("id").single();
+
+    const payload = {
+      role_name: parsed.data.title.trim(),
+      required_skills: parsed.data.requiredSkills.map((skill) => skill.trim()).filter(Boolean),
+      domain: parsed.data.domain.trim() || 'Custom',
+      difficulty: parsed.data.difficulty
+    };
+
+    if (parsed.data.id) {
+      const { error } = await supabaseAdmin!.from("job_roles").update(payload).eq("id", parsed.data.id);
+      if (error) throw error;
+      auditLog("admin.role.updated", { actor: (req as AuthedRequest).authUser?.id, roleId: parsed.data.id, title: parsed.data.title });
+      return res.json({ id: parsed.data.id });
+    }
+
+    const { data, error } = await supabaseAdmin!.from("job_roles").insert(payload).select("id").single();
     if (error) throw error;
-    auditLog("admin.role.created", { actor: (req as AuthedRequest).authUser?.id, roleId: data.id, title });
+    auditLog("admin.role.created", { actor: (req as AuthedRequest).authUser?.id, roleId: data.id, title: parsed.data.title });
     res.json({ id: data.id });
   } catch (error: any) {
-    apiError(res, 500, "SERVER_ERROR", "Failed to add role", error.message);
+    apiError(res, 500, "SERVER_ERROR", "Failed to save role", error.message);
+  }
+});
+
+app.delete('/api/admin/roles/:id', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const id = req.params.id;
+    if (!id) return apiError(res, 400, 'VALIDATION_ERROR', 'Invalid role id');
+
+    const { error } = await supabaseAdmin!.from('job_roles').delete().eq('id', id);
+    if (error) throw error;
+
+    auditLog('admin.role.deleted', { actor: (req as AuthedRequest).authUser?.id, roleId: id });
+    res.json({ success: true });
+  } catch (error: any) {
+    apiError(res, 500, 'SERVER_ERROR', 'Failed to delete role', error.message);
   }
 });
 

@@ -5,6 +5,7 @@ export { AdminAnalytics } from './AdminAnalytics';
 export { DomainManagement } from './DomainManagement';
 export { SkillManagement } from './SkillManagement';
 export { ResourceManagement } from './ResourceManagement';
+export { RoleManagement } from './RoleManagement';
 export { UserManagement } from './UserManagement';
 export { AdminTable } from './AdminTable';
 export { AdminModal } from './AdminModal';

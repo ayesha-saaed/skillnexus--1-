@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { mapSnakeToCamel } from '../lib/utils';
 import type { Progress as ProgressType, ProgressRow } from '../types/database';
 
 export interface Progress extends ProgressType {}
@@ -20,7 +21,7 @@ export const learningService = {
       resource_id: resourceId,
       status: updates.status || 'In Progress',
       progress: updates.progress || 0,
-      time_spent: updates.time_spent || 0,
+      time_spent: updates.timeSpent || 0,
       last_updated: new Date().toISOString()
     };
 
@@ -34,15 +35,19 @@ export const learningService = {
    * Fetches user progress for all resources.
    */
   async getUserProgress(userId: string) {
-    const { data, error } = await supabase.from<ProgressRow>('progress').select('*').eq('user_id', userId);
+    const { data, error } = await supabase.from('progress').select('*').eq('user_id', userId);
     if (error) throw error;
-    return (data || []).map((row) => ({
-      ...row,
-      userId: row.user_id,
-      resourceId: row.resource_id,
-      timeSpent: row.time_spent,
-      lastUpdated: row.last_updated
-    })) as ProgressType[];
+    return (data || []).map((row) => {
+      const mapped = mapSnakeToCamel(row) as any;
+      return {
+        userId: mapped.userId,
+        resourceId: mapped.resourceId,
+        status: mapped.status,
+        progress: mapped.progress,
+        timeSpent: mapped.timeSpent,
+        lastUpdated: mapped.lastUpdated
+      } as ProgressType;
+    });
   },
 
   /**

@@ -6,10 +6,11 @@ import { AdminAnalytics } from './AdminAnalytics';
 import { DomainManagement } from './DomainManagement';
 import { SkillManagement } from './SkillManagement';
 import { ResourceManagement } from './ResourceManagement';
+import { RoleManagement } from './RoleManagement';
 import { UserManagement } from './UserManagement';
 import { useToast, ToastContainer } from './useToast';
 
-type AdminTab = 'overview' | 'domains' | 'skills' | 'resources' | 'users';
+type AdminTab = 'overview' | 'roles' | 'domains' | 'skills' | 'resources' | 'users';
 
 interface AdminDashboardProps {
   onNavigate: (page: any) => void;
@@ -78,9 +79,10 @@ export function AdminDashboard({ onNavigate }: AdminDashboardProps) {
 
   const tabs: { id: AdminTab; label: string; icon: typeof ShieldAlert }[] = [
     { id: 'overview', label: 'Overview', icon: BarChart3 },
+    { id: 'roles', label: 'Roles', icon: Briefcase },
     { id: 'domains', label: 'Domains', icon: Database },
     { id: 'skills', label: 'Skills', icon: PackageOpen },
-    { id: 'resources', label: 'Resources', icon: Briefcase },
+    { id: 'resources', label: 'Resources', icon: PackageOpen },
     { id: 'users', label: 'Users', icon: Users }
   ];
 
@@ -159,6 +161,7 @@ export function AdminDashboard({ onNavigate }: AdminDashboardProps) {
           transition={{ duration: 0.2 }}
         >
           {activeTab === 'overview' && <AdminAnalytics />}
+          {activeTab === 'roles' && <RoleManagement />}
           {activeTab === 'domains' && <DomainManagement />}
           {activeTab === 'skills' && <SkillManagement />}
           {activeTab === 'resources' && <ResourceManagement />}

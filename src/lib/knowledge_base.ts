@@ -79,7 +79,7 @@ export const JOB_ROLES = [
       { name: "Next.js", importance: 0.85, requiredProficiency: 0.75 },
       { name: "JavaScript", importance: 1.0, requiredProficiency: 0.95 },
       { name: "Tailwind CSS", importance: 0.8, requiredProficiency: 0.8 },
-      { name: "Storybook", importance: 0.6, requiredProficiency: 0.6 },
+      { name: "Storybook", importance: 0.6, requiredProficiency: 0.6 }
     ]
   },
   {
@@ -91,22 +91,163 @@ export const JOB_ROLES = [
       { name: "PostgreSQL", importance: 0.85, requiredProficiency: 0.7 },
       { name: "TypeScript", importance: 0.8, requiredProficiency: 0.75 },
       { name: "Docker", importance: 0.7, requiredProficiency: 0.6 },
-      { name: "JavaScript", importance: 1.0, requiredProficiency: 0.9 },
+      { name: "JavaScript", importance: 1.0, requiredProficiency: 0.9 }
     ]
   },
   {
     jobRole: "AI Research Scientist",
-    domain: "AI",
+    domain: "AI / Machine Learning",
     requiredSkills: [
       { name: "Python", importance: 1.0, requiredProficiency: 0.95 },
       { name: "PyTorch", importance: 0.95, requiredProficiency: 0.9 },
       { name: "NumPy", importance: 0.9, requiredProficiency: 0.85 },
       { name: "TensorFlow", importance: 0.8, requiredProficiency: 0.8 },
       { name: "Fine Tuning", importance: 0.85, requiredProficiency: 0.8 },
-      { name: "LangChain", importance: 0.75, requiredProficiency: 0.7 },
+      { name: "LangChain", importance: 0.75, requiredProficiency: 0.7 }
     ]
   },
-  // New domains from CSV data
+  {
+    jobRole: "Software Engineer",
+    domain: "Software Engineering",
+    requiredSkills: [
+      { name: "Git", importance: 1.0, requiredProficiency: 0.8 },
+      { name: "JavaScript", importance: 0.95, requiredProficiency: 0.8 },
+      { name: "Python", importance: 0.9, requiredProficiency: 0.8 },
+      { name: "Java", importance: 0.85, requiredProficiency: 0.8 },
+      { name: "Unit Testing", importance: 0.85, requiredProficiency: 0.75 },
+      { name: "CI/CD", importance: 0.8, requiredProficiency: 0.75 }
+    ]
+  },
+  {
+    jobRole: "Backend Engineer",
+    domain: "Backend",
+    requiredSkills: [
+      { name: "Node.js", importance: 0.95, requiredProficiency: 0.8 },
+      { name: "Python", importance: 0.9, requiredProficiency: 0.8 },
+      { name: "Java", importance: 0.9, requiredProficiency: 0.8 },
+      { name: "SQL", importance: 1.0, requiredProficiency: 0.8 },
+      { name: "Microservices", importance: 0.85, requiredProficiency: 0.8 },
+      { name: "Docker", importance: 0.85, requiredProficiency: 0.8 }
+    ]
+  },
+  {
+    jobRole: "Frontend Engineer",
+    domain: "Frontend",
+    requiredSkills: [
+      { name: "HTML", importance: 1.0, requiredProficiency: 0.8 },
+      { name: "CSS", importance: 1.0, requiredProficiency: 0.8 },
+      { name: "JavaScript", importance: 1.0, requiredProficiency: 0.8 },
+      { name: "React", importance: 0.95, requiredProficiency: 0.8 },
+      { name: "Accessibility", importance: 0.85, requiredProficiency: 0.8 },
+      { name: "Web Performance", importance: 0.8, requiredProficiency: 0.75 }
+    ]
+  },
+  {
+    jobRole: "Data Engineer",
+    domain: "Data Engineering",
+    requiredSkills: [
+      { name: "SQL", importance: 1.0, requiredProficiency: 0.85 },
+      { name: "Python", importance: 0.95, requiredProficiency: 0.8 },
+      { name: "ETL", importance: 0.9, requiredProficiency: 0.8 },
+      { name: "Apache Spark", importance: 0.85, requiredProficiency: 0.8 },
+      { name: "Airflow", importance: 0.8, requiredProficiency: 0.8 },
+      { name: "Data Modeling", importance: 0.9, requiredProficiency: 0.8 }
+    ]
+  },
+  {
+    jobRole: "Machine Learning Engineer",
+    domain: "AI / Machine Learning",
+    requiredSkills: [
+      { name: "Python", importance: 1.0, requiredProficiency: 0.85 },
+      { name: "TensorFlow", importance: 0.95, requiredProficiency: 0.8 },
+      { name: "PyTorch", importance: 0.95, requiredProficiency: 0.8 },
+      { name: "Scikit-Learn", importance: 0.9, requiredProficiency: 0.8 },
+      { name: "MLOps", importance: 0.85, requiredProficiency: 0.8 },
+      { name: "Data Engineering", importance: 0.8, requiredProficiency: 0.8 }
+    ]
+  },
+  {
+    jobRole: "Security Engineer",
+    domain: "Cybersecurity",
+    requiredSkills: [
+      { name: "Linux", importance: 1.0, requiredProficiency: 0.8 },
+      { name: "Networking", importance: 1.0, requiredProficiency: 0.8 },
+      { name: "Python", importance: 0.9, requiredProficiency: 0.8 },
+      { name: "OWASP", importance: 0.9, requiredProficiency: 0.8 },
+      { name: "SIEM", importance: 0.85, requiredProficiency: 0.8 },
+      { name: "Incident Response", importance: 0.8, requiredProficiency: 0.8 }
+    ]
+  },
+  {
+    jobRole: "Cloud Engineer",
+    domain: "Cloud Computing",
+    requiredSkills: [
+      { name: "AWS", importance: 0.95, requiredProficiency: 0.8 },
+      { name: "Azure", importance: 0.9, requiredProficiency: 0.8 },
+      { name: "GCP", importance: 0.9, requiredProficiency: 0.8 },
+      { name: "Docker", importance: 0.85, requiredProficiency: 0.8 },
+      { name: "Terraform", importance: 0.85, requiredProficiency: 0.8 },
+      { name: "Kubernetes", importance: 0.8, requiredProficiency: 0.8 }
+    ]
+  },
+  {
+    jobRole: "Site Reliability Engineer",
+    domain: "SRE",
+    requiredSkills: [
+      { name: "Linux", importance: 1.0, requiredProficiency: 0.8 },
+      { name: "Kubernetes", importance: 0.95, requiredProficiency: 0.8 },
+      { name: "Terraform", importance: 0.9, requiredProficiency: 0.8 },
+      { name: "Monitoring", importance: 0.9, requiredProficiency: 0.8 },
+      { name: "Incident Response", importance: 0.9, requiredProficiency: 0.8 },
+      { name: "Automation", importance: 0.85, requiredProficiency: 0.8 }
+    ]
+  },
+  {
+    jobRole: "Database Administrator",
+    domain: "Database Administration",
+    requiredSkills: [
+      { name: "SQL", importance: 1.0, requiredProficiency: 0.9 },
+      { name: "PostgreSQL", importance: 0.95, requiredProficiency: 0.85 },
+      { name: "MySQL", importance: 0.9, requiredProficiency: 0.85 },
+      { name: "Performance Tuning", importance: 0.9, requiredProficiency: 0.8 },
+      { name: "Backup/Restore", importance: 0.85, requiredProficiency: 0.8 },
+      { name: "Monitoring", importance: 0.8, requiredProficiency: 0.8 }
+    ]
+  },
+  {
+    jobRole: "QA / Test Engineer",
+    domain: "Quality Assurance",
+    requiredSkills: [
+      { name: "JavaScript", importance: 0.9, requiredProficiency: 0.8 },
+      { name: "Selenium", importance: 0.9, requiredProficiency: 0.8 },
+      { name: "Cypress", importance: 0.9, requiredProficiency: 0.8 },
+      { name: "Test Automation", importance: 0.95, requiredProficiency: 0.8 },
+      { name: "API Testing", importance: 0.85, requiredProficiency: 0.8 },
+      { name: "CI/CD", importance: 0.85, requiredProficiency: 0.8 }
+    ]
+  },
+  {
+    jobRole: "Systems Architect",
+    domain: "Architecture",
+    requiredSkills: [
+      { name: "Systems Design", importance: 1.0, requiredProficiency: 0.85 },
+      { name: "Cloud Architecture", importance: 0.95, requiredProficiency: 0.8 },
+      { name: "Microservices", importance: 0.9, requiredProficiency: 0.8 },
+      { name: "Security", importance: 0.85, requiredProficiency: 0.8 },
+      { name: "Scalability", importance: 0.9, requiredProficiency: 0.8 }
+    ]
+  },
+  {
+    jobRole: "Embedded Systems Engineer",
+    domain: "Embedded Systems",
+    requiredSkills: [
+      { name: "C", importance: 1.0, requiredProficiency: 0.85 },
+      { name: "C++", importance: 0.95, requiredProficiency: 0.8 },
+      { name: "RTOS", importance: 0.9, requiredProficiency: 0.8 },
+      { name: "Embedded Linux", importance: 0.9, requiredProficiency: 0.8 },
+      { name: "Hardware Debugging", importance: 0.85, requiredProficiency: 0.8 }
+    ]
+  },
   {
     jobRole: "Frontend Development",
     domain: "Frontend Development",

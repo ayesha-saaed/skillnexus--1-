@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabase, getAccessToken } from '../lib/supabase';
 import { getCurrentUser } from '../lib/firebase';
 import { Target, CheckCircle, AlertCircle, ArrowRight, BookOpen, Search, X, BarChart3, Download } from 'lucide-react';
 import { JOB_ROLES, PROFICIENCY_SCORES, DEFAULT_REQUIRED_PROFICIENCY, LEARNING_RESOURCES } from '../lib/knowledge_base';
@@ -62,7 +62,6 @@ export function SkillAnalysis({ user, onNavigate }: SkillAnalysisProps): React.J
   const inputRef = useRef<HTMLInputElement>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
 
-// ── Job Roles from knowledge base ─────────────────────────────────────────────
   const JOB_ROLE_DOMAINS: Domain[] = JOB_ROLES.map((role, index) => ({
     id: `job-${index}`,
     name: role.jobRole,
@@ -75,16 +74,35 @@ export function SkillAnalysis({ user, onNavigate }: SkillAnalysisProps): React.J
     async function loadData() {
       setFetchingData(true);
       try {
-        setDomains(JOB_ROLE_DOMAINS); // Static job roles
+        setDomains(JOB_ROLE_DOMAINS); // Static fallback while DB roles load
 
-        // Fetch user's current skills WITH proficiency
         const currentUser = await getCurrentUser();
+        let authToken: string | null = null;
+
         if (currentUser) {
           const { data: skillData } = await supabase
             .from('user_skills')
             .select('skill_name, proficiency_level')
             .eq('user_id', currentUser.id);
-          setUserSkills((skillData || []).map((s: any) => ({name: s.skill_name, proficiency: s.proficiency_level || 'Beginner'})));
+          setUserSkills((skillData || []).map((s: any) => ({ name: s.skill_name, proficiency: s.proficiency_level || 'Beginner' })));
+          authToken = await getAccessToken();
+        }
+
+        if (authToken) {
+          const response = await fetch('/api/job-roles', {
+            headers: { Authorization: `Bearer ${authToken}` }
+          });
+          if (response.ok) {
+            const roleData = await response.json();
+            setDomains((roleData || []).map((role: any, index: number) => ({
+              id: role.id || `job-db-${index}`,
+              name: role.role_name,
+              domain: role.domain || 'General',
+              requiredSkills: (role.required_skills || []).map((name: string) => ({ name, importance: 0.8, requiredProficiency: 0.8 }))
+            })));
+          } else {
+            console.warn('Job role API failed', response.status, await response.text());
+          }
         }
       } catch (e: any) {
         setError(e.message || 'Failed to load data');

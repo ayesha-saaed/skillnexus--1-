@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase, getCurrentUser, getAccessToken } from '../lib/supabase';
 import { Key, Users, Briefcase, TrendingUp, Settings, Plus, Trash2, Database, ShieldAlert, Sparkles, LayoutDashboard } from 'lucide-react';
 import { motion } from 'motion/react';
+import { RoleManagement } from '../components/admin/RoleManagement';
 
 interface AdminProps {
   onNavigate: (page: any) => void;
@@ -11,7 +12,7 @@ export function Admin({ onNavigate }: AdminProps) {
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({ users: 0, roles: 0, resources: 0 });
-  const [activeTab, setActiveTab] = useState<'overview' | 'resources'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'resources' | 'roles'>('overview');
   
   const [newRes, setNewRes] = useState({ title: '', url: '', skill: '', type: 'Course', difficulty: 'Beginner', description: '' });
 
@@ -153,6 +154,12 @@ export function Admin({ onNavigate }: AdminProps) {
             <LayoutDashboard className="w-4 h-4" /> System Overview
           </button>
           <button 
+            onClick={() => setActiveTab('roles')}
+            className={`flex-1 py-4 text-[10px] font-bold uppercase tracking-widest flex items-center justify-center gap-2 transition-all ${activeTab === 'roles' ? 'bg-white/5 text-white' : 'text-zinc-500 hover:text-white'}`}
+          >
+            <Briefcase className="w-4 h-4" /> Manage Roles
+          </button>
+          <button 
             onClick={() => setActiveTab('resources')}
             className={`flex-1 py-4 text-[10px] font-bold uppercase tracking-widest flex items-center justify-center gap-2 transition-all ${activeTab === 'resources' ? 'bg-white/5 text-white' : 'text-zinc-500 hover:text-white'}`}
           >
@@ -172,6 +179,8 @@ export function Admin({ onNavigate }: AdminProps) {
                   </div>
                </div>
             </div>
+          ) : activeTab === 'roles' ? (
+            <RoleManagement />
           ) : (
             <div className="space-y-10">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
