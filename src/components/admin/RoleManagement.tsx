@@ -50,22 +50,7 @@ export function RoleManagement() {
   useEffect(() => {
     void fetchRoles();
   }, []);
-useEffect(() => {
-  const fetchRoles = async () => {
-    const { data, error } = await supabase
-      .from('job_roles')
-      .select('*')
-      .order('created_at', { ascending: false });
-    
-    if (error) {
-      console.error('Error fetching roles:', error);
-    } else {
-      setRoles(data);  // Set the fetched job roles to state
-    }
-  };
 
-  fetchRoles();
-}, []);
   async function fetchRoles() {
     try {
       setLoading(true);
@@ -233,28 +218,7 @@ useEffect(() => {
           <Plus className="w-4 h-4" /> Add Job Role
         </button>
       </div>
-{roles.length > 0 && (
-  <table>
-    <thead>
-      <tr>
-        <th>Role Name</th>
-        <th>Domain</th>
-        <th>Required Skills</th>
-        <th>Difficulty</th>
-      </tr>
-    </thead>
-    <tbody>
-      {roles.map((role) => (
-        <tr key={role.id}>
-          <td>{role.role_name}</td>
-          <td>{role.domain}</td>
-          <td>{role.required_skills.join(', ')}</td>
-          <td>{role.difficulty}</td>
-        </tr>
-      ))}
-    </tbody>
-  </table>
-)}
+
       <AdminTable<JobRole>
         data={filteredRoles}
         loading={loading}

@@ -69,6 +69,29 @@ export function SkillAnalysis({ user, onNavigate }: SkillAnalysisProps): React.J
     requiredSkills: role.requiredSkills
   }));
 
+  // Merge default roles with the ones returned by the API so admin-added
+  // roles are *appended* to the existing/default list instead of replacing it.
+  // De-duplication is done by case-insensitive role name; DB rows take
+  // precedence (so an admin can override a default's metadata) while their
+  // original ordering is kept (defaults first, custom roles after).
+  function mergeRoleSources(defaults: Domain[], fromDb: Domain[]): Domain[] {
+    const byName = new Map<string, Domain>();
+    defaults.forEach((d) => byName.set(d.name.trim().toLowerCase(), d));
+    fromDb.forEach((d) => {
+      const key = d.name.trim().toLowerCase();
+      const existing = byName.get(key);
+      byName.set(key, existing ? { ...existing, ...d, id: d.id } : d);
+    });
+    const defaultOrder = defaults.map((d) => d.name.trim().toLowerCase());
+    const orderedDefaults = defaultOrder
+      .map((k) => byName.get(k))
+      .filter((d): d is Domain => Boolean(d));
+    const extras = Array.from(byName.values()).filter(
+      (d) => !defaultOrder.includes(d.name.trim().toLowerCase())
+    );
+    return [...orderedDefaults, ...extras];
+  }
+
   // Load domains and current user skills on mount
   useEffect(() => {
     async function loadData() {
@@ -94,14 +117,16 @@ export function SkillAnalysis({ user, onNavigate }: SkillAnalysisProps): React.J
           });
           if (response.ok) {
             const roleData = await response.json();
-            setDomains((roleData || []).map((role: any, index: number) => ({
+            const dbDomains: Domain[] = (roleData || []).map((role: any, index: number) => ({
               id: role.id || `job-db-${index}`,
               name: role.role_name,
               domain: role.domain || 'General',
               requiredSkills: (role.required_skills || []).map((name: string) => ({ name, importance: 0.8, requiredProficiency: 0.8 }))
-            })));
+            }));
+            setDomains(mergeRoleSources(JOB_ROLE_DOMAINS, dbDomains));
           } else {
             console.warn('Job role API failed', response.status, await response.text());
+            setDomains(JOB_ROLE_DOMAINS);
           }
         }
       } catch (e: any) {

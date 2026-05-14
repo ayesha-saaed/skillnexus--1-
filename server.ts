@@ -543,29 +543,60 @@ app.get("/api/industry-trends", async (req, res) => {
 app.get("/api/job-roles", requireAuth, async (req, res) => {
   try {
     const defaultRoles = getDefaultRoleRows();
+
+    // Best-effort: ensure default roles exist in the DB so admin edits/deletes
+    // can target real rows. We deliberately swallow errors here so a partial
+    // seeding failure never causes the response to drop the defaults.
     if (defaultRoles.length) {
-      const { data: existingRoles, error: existingError } = await supabaseAdmin!
-        .from("job_roles")
-        .select("role_name");
-      if (existingError) throw existingError;
-
-      const existingNames = new Set(
-        (existingRoles || []).map((row: any) => String(row.role_name || '').trim().toLowerCase())
-      );
-      const missingRoles = defaultRoles.filter(
-        (role) => !existingNames.has(String(role.role_name || '').trim().toLowerCase())
-      );
-
-      if (missingRoles.length) {
-        const { error: insertError } = await supabaseAdmin!.from("job_roles").insert(missingRoles);
-        if (insertError) throw insertError;
+      try {
+        const { data: existingRoles, error: existingError } = await supabaseAdmin!
+          .from("job_roles")
+          .select("role_name");
+        if (!existingError) {
+          const existingNames = new Set(
+            (existingRoles || []).map((row: any) => String(row.role_name || '').trim().toLowerCase())
+          );
+          const missingRoles = defaultRoles.filter(
+            (role) => !existingNames.has(String(role.role_name || '').trim().toLowerCase())
+          );
+          if (missingRoles.length) {
+            const { error: insertError } = await supabaseAdmin!.from("job_roles").insert(missingRoles);
+            if (insertError) {
+              auditLog("job-roles.seed.warn", { message: insertError.message });
+            }
+          }
+        } else {
+          auditLog("job-roles.seed.warn", { message: existingError.message });
+        }
+      } catch (seedErr: any) {
+        auditLog("job-roles.seed.warn", { message: seedErr?.message || String(seedErr) });
       }
     }
 
     const { data: roles, error } = await supabaseAdmin!.from("job_roles").select("*").order("role_name");
     if (error) throw error;
 
-    return res.json(roles || []);
+    // Defensive merge: if for any reason (seeding failure, RLS, etc.) the DB
+    // doesn't contain a default role, surface it from the in-memory knowledge
+    // base so the gap-checker page never loses its baseline list. Admin-added
+    // roles from the DB are always preserved and appended.
+    const dbRoles = roles || [];
+    const dbNameSet = new Set(
+      dbRoles.map((row: any) => String(row.role_name || '').trim().toLowerCase())
+    );
+    const fallbackDefaults = defaultRoles
+      .filter((row) => !dbNameSet.has(String(row.role_name || '').trim().toLowerCase()))
+      .map((row, index) => ({
+        id: `default-${index}`,
+        role_name: row.role_name,
+        required_skills: row.required_skills,
+        domain: row.domain,
+        difficulty: row.difficulty,
+        created_at: null,
+        is_default: true
+      }));
+
+    return res.json([...dbRoles, ...fallbackDefaults]);
   } catch (error: any) {
     return apiError(res, 500, "SERVER_ERROR", "Failed to fetch job roles", error.message);
   }
