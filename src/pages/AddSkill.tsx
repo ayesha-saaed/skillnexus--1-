@@ -5,6 +5,7 @@ import { Plus, Trash2, Search, Award, BarChart3, BookOpen, TrendingUp } from 'lu
 import { cn } from '../lib/utils';
 import { gamificationService } from '../services/gamificationService';
 import { learningService } from '../services/learningService';
+import { isValidSkillToken } from '../lib/inputValidation';
 
 interface AddSkillProps {
   onNavigate: (page: any) => void;
@@ -70,6 +71,12 @@ export function AddSkill({ onNavigate, user }: AddSkillProps) {
   async function handleAdd() {
     const trimmedSkill = newSkill.trim();
     if (!trimmedSkill) return;
+    if (!isValidSkillToken(trimmedSkill)) {
+      setErrorMessage(
+        "Skill name must be 2–80 characters; start with a letter, number, or . + #; then letters, numbers, spaces, and -+#.() and apostrophe (')."
+      );
+      return;
+    }
     setLoading(true);
     setErrorMessage('');
     try {

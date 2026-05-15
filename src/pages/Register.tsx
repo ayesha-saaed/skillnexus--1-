@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { supabase } from '../lib/firebase';
 import { motion } from 'motion/react';
 import { Mail, Lock, User, AlertCircle, Chrome } from 'lucide-react';
+import { isValidDisplayName } from '../lib/inputValidation';
 
 interface RegisterProps {
   onNavigate: (page: any) => void;
@@ -21,7 +22,9 @@ export function Register({ onNavigate }: RegisterProps) {
   const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
 
   const validateName = (value: string) => {
-    if (value.length < 2) return 'Name must be at least 2 characters';
+    if (!isValidDisplayName(value)) {
+      return "Name must be 2–80 characters; start with a letter, number, or . + #; then letters, numbers, spaces, and -+#.() and apostrophe (').";
+    }
     return '';
   };
 

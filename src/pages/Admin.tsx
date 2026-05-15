@@ -3,12 +3,14 @@ import { supabase, getCurrentUser, getAccessToken } from '../lib/supabase';
 import { Key, Users, Briefcase, TrendingUp, Settings, Plus, Trash2, Database, ShieldAlert, Sparkles, LayoutDashboard } from 'lucide-react';
 import { motion } from 'motion/react';
 import { RoleManagement } from '../components/admin/RoleManagement';
+import { useToast, ToastContainer } from '../components/admin/useToast';
 
 interface AdminProps {
   onNavigate: (page: any) => void;
 }
 
 export function Admin({ onNavigate }: AdminProps) {
+  const { toasts, showToast } = useToast();
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({ users: 0, roles: 0, resources: 0 });
@@ -180,7 +182,7 @@ export function Admin({ onNavigate }: AdminProps) {
                </div>
             </div>
           ) : activeTab === 'roles' ? (
-            <RoleManagement />
+            <RoleManagement showToast={showToast} />
           ) : (
             <div className="space-y-10">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -261,6 +263,7 @@ export function Admin({ onNavigate }: AdminProps) {
           )}
         </div>
       </div>
+      <ToastContainer toasts={toasts} />
     </div>
   );
 }

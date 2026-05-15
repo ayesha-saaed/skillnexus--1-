@@ -11,6 +11,8 @@ interface AdminModalProps {
   children: React.ReactNode;
   submitText?: string;
   submitVariant?: 'primary' | 'danger';
+  /** Wider panel for dense forms (e.g. admin user role). */
+  wide?: boolean;
 }
 
 export function AdminModal({
@@ -21,7 +23,8 @@ export function AdminModal({
   loading,
   children,
   submitText = 'Save',
-  submitVariant = 'primary'
+  submitVariant = 'primary',
+  wide = false
 }: AdminModalProps) {
   return (
     <AnimatePresence>
@@ -38,7 +41,7 @@ export function AdminModal({
             initial={{ opacity: 0, scale: 0.95, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 10 }}
-            className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md z-50"
+            className={`fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full z-50 ${wide ? 'max-w-4xl' : 'max-w-md'}`}
           >
             <div className="bg-linear-to-br from-zinc-900 to-black rounded-2xl border border-white/10 p-6 shadow-2xl">
               <div className="flex items-center justify-between mb-6">

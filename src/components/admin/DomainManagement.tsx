@@ -5,7 +5,8 @@ import { normalizeText, isDuplicateDbError } from '../../lib/utils';
 import { AdminTable } from './AdminTable';
 import { AdminModal } from './AdminModal';
 import { AdminInput } from './AdminInput';
-import { useToast } from './useToast';
+import type { ShowToastFn } from './useToast';
+import { isValidDomainLabel } from '../../lib/inputValidation';
 
 interface Domain {
   id: string;
@@ -17,7 +18,7 @@ interface Domain {
   created_at: string;
 }
 
-export function DomainManagement() {
+export function DomainManagement({ showToast }: { showToast: ShowToastFn }) {
   const [domains, setDomains] = useState<Domain[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -26,7 +27,6 @@ export function DomainManagement() {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState<string>('created_at');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
-  const { toasts, showToast } = useToast();
 
   const [formData, setFormData] = useState({
     name: '',
@@ -61,7 +61,10 @@ export function DomainManagement() {
   function validateForm(): string | null {
     const newErrors: Record<string, string> = {};
     if (!formData.name.trim()) newErrors.name = 'Domain name is required';
-    if (formData.name.trim().length < 2) newErrors.name = 'Name must be at least 2 characters';
+    else if (!isValidDomainLabel(formData.name.trim())) {
+      newErrors.name =
+        'Use 2–80 characters; start with a letter, number, or . + #; then letters, numbers, spaces, hyphen, ampersand, slash, comma, plus, period, parentheses, and apostrophe.';
+    }
     if (!formData.description.trim()) newErrors.description = 'Description is required';
     setErrors(newErrors);
     if (Object.keys(newErrors).length) {

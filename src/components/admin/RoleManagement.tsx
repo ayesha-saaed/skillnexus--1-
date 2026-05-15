@@ -6,7 +6,8 @@ import { AdminTable } from './AdminTable';
 import { AdminModal } from './AdminModal';
 import { AdminInput } from './AdminInput';
 import { AdminSelect } from './AdminSelect';
-import { useToast } from './useToast';
+import type { ShowToastFn } from './useToast';
+import { isValidJobRoleTitle, isValidDomainLabel, validateCommaSeparatedSkills } from '../../lib/inputValidation';
 
 interface JobRole {
   id: string;
@@ -30,7 +31,7 @@ const difficultyOptions = [
   { value: 'Advanced', label: 'Advanced' }
 ];
 
-export function RoleManagement() {
+export function RoleManagement({ showToast }: { showToast: ShowToastFn }) {
   const [roles, setRoles] = useState<JobRole[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -44,7 +45,6 @@ export function RoleManagement() {
     requiredSkills: ''
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const { showToast } = useToast();
   const [selectedRoleToDelete, setSelectedRoleToDelete] = useState<string | null>(null);
 
   useEffect(() => {
@@ -70,8 +70,17 @@ export function RoleManagement() {
   function validateForm() {
     const newErrors: Record<string, string> = {};
     if (!formData.title.trim()) newErrors.title = 'Role title is required';
-    if (formData.title.trim().length < 3) newErrors.title = 'Role title must be at least 3 characters';
+    else if (!isValidJobRoleTitle(formData.title.trim())) {
+      newErrors.title =
+        "Use 3–120 characters; start with a letter, number, or . + #; then letters, numbers, spaces, and -&,./() and apostrophe (').";
+    }
     if (!formData.domain.trim()) newErrors.domain = 'Domain / category is required';
+    else if (!isValidDomainLabel(formData.domain.trim())) {
+      newErrors.domain =
+        "Use 2–80 characters; start with a letter, number, or . + #; then letters, numbers, spaces, and -&/,+.() and apostrophe (').";
+    }
+    const skillsCheck = validateCommaSeparatedSkills(formData.requiredSkills);
+    if (!skillsCheck.ok) newErrors.requiredSkills = skillsCheck.error;
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   }

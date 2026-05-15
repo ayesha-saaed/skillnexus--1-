@@ -9,8 +9,7 @@ import { ResourceManagement } from './ResourceManagement';
 import { RoleManagement } from './RoleManagement';
 import { UserManagement } from './UserManagement';
 import { useToast, ToastContainer } from './useToast';
-
-type AdminTab = 'overview' | 'roles' | 'domains' | 'skills' | 'resources' | 'users';
+import type { AdminTab } from './adminTab';
 
 interface AdminDashboardProps {
   onNavigate: (page: any) => void;
@@ -160,12 +159,14 @@ export function AdminDashboard({ onNavigate }: AdminDashboardProps) {
           exit={{ opacity: 0, y: -10 }}
           transition={{ duration: 0.2 }}
         >
-          {activeTab === 'overview' && <AdminAnalytics />}
-          {activeTab === 'roles' && <RoleManagement />}
-          {activeTab === 'domains' && <DomainManagement />}
-          {activeTab === 'skills' && <SkillManagement />}
-          {activeTab === 'resources' && <ResourceManagement />}
-          {activeTab === 'users' && <UserManagement />}
+          {activeTab === 'overview' && (
+            <AdminAnalytics showToast={showToast} onOpenTab={(tab) => setActiveTab(tab)} />
+          )}
+          {activeTab === 'roles' && <RoleManagement showToast={showToast} />}
+          {activeTab === 'domains' && <DomainManagement showToast={showToast} />}
+          {activeTab === 'skills' && <SkillManagement showToast={showToast} />}
+          {activeTab === 'resources' && <ResourceManagement showToast={showToast} />}
+          {activeTab === 'users' && <UserManagement showToast={showToast} />}
         </motion.div>
       </main>
 

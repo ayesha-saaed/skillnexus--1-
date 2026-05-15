@@ -4,6 +4,8 @@ import { motion, AnimatePresence } from 'motion/react';
 
 export type ToastType = 'success' | 'error' | 'info';
 
+export type ShowToastFn = (message: string, type?: ToastType) => void;
+
 interface Toast {
   id: string;
   message: string;

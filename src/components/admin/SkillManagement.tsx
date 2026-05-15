@@ -6,7 +6,8 @@ import { AdminTable } from './AdminTable';
 import { AdminModal } from './AdminModal';
 import { AdminInput } from './AdminInput';
 import { AdminSelect } from './AdminSelect';
-import { useToast } from './useToast';
+import type { ShowToastFn } from './useToast';
+import { isValidDisplayName } from '../../lib/inputValidation';
 
 interface Skill {
   id: string;
@@ -31,7 +32,7 @@ interface LearnerSkillRow {
   profiles?: { name: string | null; email: string | null } | null;
 }
 
-export function SkillManagement() {
+export function SkillManagement({ showToast }: { showToast: ShowToastFn }) {
   const [skills, setSkills] = useState<Skill[]>([]);
   const [learnerSkills, setLearnerSkills] = useState<LearnerSkillRow[]>([]);
   const [domains, setDomains] = useState<Domain[]>([]);
@@ -41,7 +42,6 @@ export function SkillManagement() {
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const { toasts, showToast } = useToast();
 
   const [formData, setFormData] = useState({
     name: '',
@@ -110,7 +110,10 @@ export function SkillManagement() {
   function validateForm(): string | null {
     const newErrors: Record<string, string> = {};
     if (!formData.name.trim()) newErrors.name = 'Skill name is required';
-    if (formData.name.trim().length < 2) newErrors.name = 'Name must be at least 2 characters';
+    else if (!isValidDisplayName(formData.name.trim())) {
+      newErrors.name =
+        "Use 2–80 characters; start with a letter, number, or . + #; then letters, numbers, spaces, and -+#.() and apostrophe (').";
+    }
     if (!formData.description.trim()) newErrors.description = 'Description is required';
     // domain_id is optional: lets you add catalog skills before any domains exist in the DB
     setErrors(newErrors);

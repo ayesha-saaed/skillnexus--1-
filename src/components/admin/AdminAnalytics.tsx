@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Award, BookOpen, Zap, TrendingUp, UserCircle } from 'lucide-react';
+import { Users, Award, BookOpen, Zap, TrendingUp, UserCircle, ChevronRight, LayoutGrid } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-import { useToast } from './useToast';
+import type { ShowToastFn } from './useToast';
+import type { AdminTab } from './adminTab';
 
 interface Stats {
   totalUsers: number;
@@ -15,7 +16,12 @@ interface Stats {
   activeUsers: number;
 }
 
-export function AdminAnalytics() {
+interface AdminAnalyticsProps {
+  showToast: ShowToastFn;
+  onOpenTab: (tab: AdminTab) => void;
+}
+
+export function AdminAnalytics({ showToast, onOpenTab }: AdminAnalyticsProps) {
   const [stats, setStats] = useState<Stats>({
     totalUsers: 0,
     totalAdmins: 0,
@@ -26,8 +32,6 @@ export function AdminAnalytics() {
     activeUsers: 0
   });
   const [loading, setLoading] = useState(true);
-  const { showToast } = useToast();
-
   useEffect(() => {
     fetchStats();
   }, []);
@@ -75,7 +79,17 @@ export function AdminAnalytics() {
     }
   }
 
-  const statCards = [
+  const statCards: {
+    label: string;
+    value: number;
+    icon: typeof Users;
+    color: string;
+    bgColor: string;
+    textColor: string;
+    iconColor: string;
+    targetTab?: AdminTab;
+    hint?: string;
+  }[] = [
     {
       label: 'Total Users',
       value: stats.totalUsers,
@@ -83,7 +97,9 @@ export function AdminAnalytics() {
       color: 'blue',
       bgColor: 'bg-blue-600/20',
       textColor: 'text-blue-300',
-      iconColor: 'text-blue-400'
+      iconColor: 'text-blue-400',
+      targetTab: 'users',
+      hint: 'Open user directory & details'
     },
     {
       label: 'Admin Users',
@@ -92,7 +108,9 @@ export function AdminAnalytics() {
       color: 'red',
       bgColor: 'bg-red-600/20',
       textColor: 'text-red-300',
-      iconColor: 'text-red-400'
+      iconColor: 'text-red-400',
+      targetTab: 'users',
+      hint: 'Manage accounts & roles'
     },
     {
       label: 'Active Users',
@@ -101,7 +119,9 @@ export function AdminAnalytics() {
       color: 'green',
       bgColor: 'bg-green-600/20',
       textColor: 'text-green-300',
-      iconColor: 'text-green-400'
+      iconColor: 'text-green-400',
+      targetTab: 'users',
+      hint: 'View learners in Users'
     },
     {
       label: 'Total Domains',
@@ -110,7 +130,9 @@ export function AdminAnalytics() {
       color: 'purple',
       bgColor: 'bg-purple-600/20',
       textColor: 'text-purple-300',
-      iconColor: 'text-purple-400'
+      iconColor: 'text-purple-400',
+      targetTab: 'domains',
+      hint: 'Edit domains'
     },
     {
       label: 'Learner skills (My Skills)',
@@ -119,7 +141,9 @@ export function AdminAnalytics() {
       color: 'amber',
       bgColor: 'bg-amber-600/20',
       textColor: 'text-amber-200',
-      iconColor: 'text-amber-400'
+      iconColor: 'text-amber-400',
+      targetTab: 'users',
+      hint: 'Inspect per-user skills in User details'
     },
     {
       label: 'Curated skills (catalog)',
@@ -128,7 +152,9 @@ export function AdminAnalytics() {
       color: 'yellow',
       bgColor: 'bg-yellow-600/20',
       textColor: 'text-yellow-300',
-      iconColor: 'text-yellow-400'
+      iconColor: 'text-yellow-400',
+      targetTab: 'skills',
+      hint: 'Manage catalog skills'
     },
     {
       label: 'Total Resources',
@@ -137,7 +163,9 @@ export function AdminAnalytics() {
       color: 'cyan',
       bgColor: 'bg-cyan-600/20',
       textColor: 'text-cyan-300',
-      iconColor: 'text-cyan-400'
+      iconColor: 'text-cyan-400',
+      targetTab: 'resources',
+      hint: 'Curate library resources'
     }
   ];
 
@@ -146,16 +174,31 @@ export function AdminAnalytics() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {statCards.map((card, idx) => {
           const Icon = card.icon;
+          const clickable = Boolean(card.targetTab);
           return (
-            <div key={idx} className={`${card.bgColor} border border-white/10 rounded-lg p-6 transition-all hover:border-white/20`}>
-              <div className="flex items-start justify-between">
-                <div>
+            <button
+              key={idx}
+              type="button"
+              disabled={!clickable}
+              onClick={() => card.targetTab && onOpenTab(card.targetTab)}
+              className={`text-left w-full ${card.bgColor} border border-white/10 rounded-lg p-6 transition-all ${
+                clickable ? 'hover:border-white/25 cursor-pointer hover:bg-white/5' : 'opacity-90 cursor-default'
+              }`}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
                   <p className="text-xs font-bold uppercase tracking-widest text-zinc-400 mb-2">{card.label}</p>
                   <p className="text-3xl font-black text-white">{loading ? '-' : card.value}</p>
+                  {card.hint && (
+                    <p className="text-[11px] text-zinc-500 mt-2 flex items-center gap-1">
+                      {clickable && <ChevronRight className="w-3 h-3 shrink-0 text-zinc-500" />}
+                      {card.hint}
+                    </p>
+                  )}
                 </div>
-                <Icon className={`w-8 h-8 ${card.iconColor} opacity-50`} />
+                <Icon className={`w-8 h-8 shrink-0 ${card.iconColor} opacity-50`} />
               </div>
-            </div>
+            </button>
           );
         })}
       </div>
@@ -236,6 +279,38 @@ export function AdminAnalytics() {
               <p className="text-xs text-zinc-500">Learning materials curated</p>
             </div>
           </div>
+        </div>
+      </div>
+
+      <div className="bg-white/2 border border-white/10 rounded-lg p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <LayoutGrid className="w-4 h-4 text-blue-400" />
+          <h3 className="text-sm font-bold uppercase tracking-widest text-white">Quick navigation</h3>
+        </div>
+        <p className="text-xs text-zinc-500 mb-4">Jump to the admin workspace that matches each area.</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {(
+            [
+              { tab: 'users' as const, title: 'User overview', desc: 'Directory, search, user details, learner skills' },
+              { tab: 'roles' as const, title: 'Job roles', desc: 'Titles, domains, required skills' },
+              { tab: 'domains' as const, title: 'Domains', desc: 'Learning paths & categories' },
+              { tab: 'skills' as const, title: 'Catalog skills', desc: 'Taxonomy linked to domains' },
+              { tab: 'resources' as const, title: 'Resources', desc: 'Library items & metadata' }
+            ] as const
+          ).map((link) => (
+            <button
+              key={link.tab}
+              type="button"
+              onClick={() => onOpenTab(link.tab)}
+              className="flex flex-col items-start text-left rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 px-4 py-3 transition-colors"
+            >
+              <span className="text-sm font-bold text-white flex items-center gap-1">
+                {link.title}
+                <ChevronRight className="w-4 h-4 text-zinc-500" />
+              </span>
+              <span className="text-[11px] text-zinc-500 mt-1 leading-snug">{link.desc}</span>
+            </button>
+          ))}
         </div>
       </div>
 

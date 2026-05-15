@@ -6,7 +6,7 @@ import { AdminTable } from './AdminTable';
 import { AdminModal } from './AdminModal';
 import { AdminInput } from './AdminInput';
 import { AdminSelect } from './AdminSelect';
-import { useToast } from './useToast';
+import type { ShowToastFn } from './useToast';
 import type { ResourceRow } from '../../types/database';
 
 interface Resource extends ResourceRow {}
@@ -21,7 +21,7 @@ interface Domain {
   name: string;
 }
 
-export function ResourceManagement() {
+export function ResourceManagement({ showToast }: { showToast: ShowToastFn }) {
   const [resources, setResources] = useState<Resource[]>([]);
   const [skills, setSkills] = useState<Skill[]>([]);
   const [domains, setDomains] = useState<Domain[]>([]);
@@ -30,7 +30,6 @@ export function ResourceManagement() {
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const { toasts, showToast } = useToast();
 
   const [formData, setFormData] = useState({
     title: '',
