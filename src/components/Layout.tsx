@@ -231,7 +231,7 @@ export function Layout({ children, user, userRole, onNavigate, currentPage }: La
               </div>
             </div>
             <div className="pt-8 border-t border-white/5 flex flex-col sm:flex-row justify-between items-center gap-4 text-[10px] font-bold text-zinc-600 uppercase tracking-widest">
-              <p>© 2026 SkillNexus AI. All systems operational.</p>
+              <p>© 2026 SkillNexus. All systems operational.</p>
               <div className="flex gap-8">
                 <a href="#" className="hover:text-zinc-400">Privacy Protocol</a>
                 <a href="#" className="hover:text-zinc-400">Terms of Service</a>
