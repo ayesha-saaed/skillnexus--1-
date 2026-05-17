@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Users, Award, BookOpen, Zap, TrendingUp, UserCircle, ChevronRight, LayoutGrid } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
+import { supabase, getAccessToken } from '../../lib/supabase';
 import type { ShowToastFn } from './useToast';
 import type { AdminTab, OpenAdminTabFn } from './adminTab';
+import { LearningResourcesPanel } from './LearningResourcesPanel';
+import type { LinkedResource } from '../../lib/resourceLinking';
+import type { ResourceRow } from '../../types/database';
 
 interface Stats {
   totalUsers: number;
@@ -32,9 +35,57 @@ export function AdminAnalytics({ showToast, onOpenTab }: AdminAnalyticsProps) {
     activeUsers: 0
   });
   const [loading, setLoading] = useState(true);
+  const [allResources, setAllResources] = useState<LinkedResource[]>([]);
+  const [resourcesLoading, setResourcesLoading] = useState(true);
+
   useEffect(() => {
-    fetchStats();
+    void Promise.all([fetchStats(), fetchAllResources()]);
   }, []);
+
+  function mapToLinked(resources: ResourceRow[]): LinkedResource[] {
+    return resources.map((r) => ({
+      id: r.id,
+      title: r.title,
+      url: r.url,
+      type: r.type || 'Course',
+      difficulty: r.difficulty || 'Beginner',
+      domain: r.domain || '',
+      skills_covered: r.skills_covered || [],
+      matchReason: 'domain' as const
+    }));
+  }
+
+  async function fetchAllResources() {
+    try {
+      setResourcesLoading(true);
+      const token = await getAccessToken();
+      if (token) {
+        const response = await fetch('/api/admin/resources', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const body = await response.json().catch(() => ({}));
+        if (response.ok && Array.isArray(body.resources)) {
+          const rows = body.resources as ResourceRow[];
+          setAllResources(mapToLinked(rows));
+          setStats((s) => ({ ...s, totalResources: rows.length }));
+          return;
+        }
+      }
+
+      const { data, error } = await supabase
+        .from('resources')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      const rows = (data || []) as ResourceRow[];
+      setAllResources(mapToLinked(rows));
+      setStats((s) => ({ ...s, totalResources: rows.length }));
+    } catch (err: any) {
+      console.warn('Overview resources fetch:', err?.message);
+    } finally {
+      setResourcesLoading(false);
+    }
+  }
 
   async function fetchStats() {
     try {
@@ -72,6 +123,7 @@ export function AdminAnalytics({ showToast, onOpenTab }: AdminAnalyticsProps) {
         totalResources: resourcesData.count || 0,
         activeUsers: activeCountRes.count || 0
       });
+
     } catch (err: any) {
       showToast(err.message || 'Failed to fetch stats', 'error');
     } finally {
@@ -289,6 +341,24 @@ export function AdminAnalytics({ showToast, onOpenTab }: AdminAnalyticsProps) {
           </div>
         </div>
       </div>
+
+      <LearningResourcesPanel
+        title="All learning resources"
+        resources={allResources}
+        loading={resourcesLoading}
+        listMaxHeightClass="max-h-80"
+        emptyHint="No resources in the library yet. Add items under Resources or run sql/seed_learning_resources_by_domain.sql."
+        footer={
+          <button
+            type="button"
+            onClick={() => onOpenTab('resources')}
+            className="mt-2 w-full flex items-center justify-center gap-1 rounded-lg border border-cyan-500/20 bg-cyan-600/10 px-3 py-2 text-xs font-bold uppercase tracking-widest text-cyan-300 hover:bg-cyan-600/20 transition-colors"
+          >
+            Manage all resources
+            <ChevronRight className="w-3.5 h-3.5" />
+          </button>
+        }
+      />
 
       <div className="bg-white/2 border border-white/10 rounded-lg p-6">
         <div className="flex items-center gap-2 mb-4">

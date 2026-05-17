@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Plus, Edit2, Trash2, Search } from 'lucide-react';
 import { supabase, getAccessToken } from '../../lib/supabase';
 import { normalizeText, isDuplicateDbError } from '../../lib/utils';
@@ -8,6 +8,8 @@ import { AdminInput } from './AdminInput';
 import { AdminSelect } from './AdminSelect';
 import type { ShowToastFn } from './useToast';
 import { isValidJobRoleTitle, isValidDomainLabel, validateCommaSeparatedSkills } from '../../lib/inputValidation';
+import { resourcesForJobRole, countLabel, type ResourceLike } from '../../lib/resourceLinking';
+import { LearningResourcesPanel } from './LearningResourcesPanel';
 
 interface JobRole {
   id: string;
@@ -46,10 +48,32 @@ export function RoleManagement({ showToast }: { showToast: ShowToastFn }) {
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [selectedRoleToDelete, setSelectedRoleToDelete] = useState<string | null>(null);
+  const [allResources, setAllResources] = useState<ResourceLike[]>([]);
+  const [resourcesLoading, setResourcesLoading] = useState(true);
+  const [domainOptions, setDomainOptions] = useState<{ value: string; label: string }[]>([]);
 
   useEffect(() => {
-    void fetchRoles();
+    void Promise.all([fetchRoles(), fetchResources(), fetchDomainNames()]);
   }, []);
+
+  async function fetchResources() {
+    try {
+      setResourcesLoading(true);
+      const { data, error } = await supabase.from('resources').select('id, title, url, type, difficulty, domain, skills_covered');
+      if (error) throw error;
+      setAllResources((data || []) as ResourceLike[]);
+    } catch (err: any) {
+      showToast(err.message || 'Failed to load learning resources', 'error');
+    } finally {
+      setResourcesLoading(false);
+    }
+  }
+
+  async function fetchDomainNames() {
+    const { data } = await supabase.from('domains').select('name').order('name');
+    const names = (data || []).map((d: { name: string }) => d.name).filter(Boolean);
+    setDomainOptions(names.map((name) => ({ value: name, label: name })));
+  }
 
   async function fetchRoles() {
     try {
@@ -195,6 +219,21 @@ export function RoleManagement({ showToast }: { showToast: ShowToastFn }) {
     }
   }
 
+  const previewLinkedResources = useMemo(() => {
+    const skills = formData.requiredSkills
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    return resourcesForJobRole(allResources, {
+      domain: formData.domain,
+      required_skills: skills
+    });
+  }, [allResources, formData.domain, formData.requiredSkills]);
+
+  function linkedCountForRole(role: JobRole): number {
+    return resourcesForJobRole(allResources, role).length;
+  }
+
   const filteredRoles = roles.filter((role) =>
     role.role_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     role.domain.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -244,6 +283,13 @@ export function RoleManagement({ showToast }: { showToast: ShowToastFn }) {
             )
           },
           {
+            header: 'Learning resources',
+            key: 'id',
+            render: (_id, role) => (
+              <span className="text-xs font-medium text-cyan-400/90">{countLabel(linkedCountForRole(role))}</span>
+            )
+          },
+          {
             header: 'Created',
             key: 'created_at',
             render: (value: string) => new Date(value).toLocaleDateString()
@@ -278,6 +324,7 @@ export function RoleManagement({ showToast }: { showToast: ShowToastFn }) {
 
       <AdminModal
         isOpen={isModalOpen}
+        wide
         title={editingId ? 'Edit Job Role' : 'Add Job Role'}
         onClose={() => {
           setIsModalOpen(false);
@@ -295,14 +342,24 @@ export function RoleManagement({ showToast }: { showToast: ShowToastFn }) {
           error={errors.title}
           required
         />
-        <AdminInput
-          label="Domain / Category"
-          value={formData.domain}
-          onChange={(value) => setFormData({ ...formData, domain: value })}
-          placeholder="e.g. Cloud/DevOps"
-          error={errors.domain}
-          required
-        />
+        {domainOptions.length > 0 ? (
+          <AdminSelect
+            label="Domain / Category"
+            value={formData.domain}
+            onChange={(value) => setFormData({ ...formData, domain: value })}
+            options={domainOptions}
+            required
+          />
+        ) : (
+          <AdminInput
+            label="Domain / Category"
+            value={formData.domain}
+            onChange={(value) => setFormData({ ...formData, domain: value })}
+            placeholder="e.g. Cloud/DevOps"
+            error={errors.domain}
+            required
+          />
+        )}
         <AdminSelect
           label="Difficulty"
           value={formData.difficulty}
@@ -315,6 +372,11 @@ export function RoleManagement({ showToast }: { showToast: ShowToastFn }) {
           onChange={(value) => setFormData({ ...formData, requiredSkills: value })}
           placeholder="Comma-separated skills, e.g. HTML, CSS, JavaScript"
           error={errors.requiredSkills}
+        />
+        <LearningResourcesPanel
+          resources={previewLinkedResources}
+          loading={resourcesLoading}
+          emptyHint="Add resources in Admin → Resources with the same domain name and overlapping skills to link them here."
         />
       </AdminModal>
 

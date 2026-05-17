@@ -23,16 +23,35 @@ export default function App() {
       try {
         setUser(u);
 if (u) {
-          const adminEmails = ['saeedayesha995@gmail.com', 'fazeelmaqsood38@gmail.com'];
-          const isAdminEmail = adminEmails.includes(u.email || '');
+          const adminEmails = (
+            import.meta.env.VITE_ADMIN_EMAILS ||
+            'saeedayesha995@gmail.com,fazeelmaqsood38@gmail.com,ayeshrao2004@gmail.com'
+          )
+            .split(',')
+            .map((e: string) => e.trim().toLowerCase())
+            .filter(Boolean);
+          const isAdminEmail = adminEmails.includes((u.email || '').toLowerCase());
+
+          const { data: existing } = await supabase
+            .from('profiles')
+            .select('role, points, level, badges, name')
+            .eq('id', u.id)
+            .maybeSingle();
+
+          const role = isAdminEmail ? 'admin' : existing?.role || 'student';
+
           const profileData = {
             id: u.id,
-            name: u.user_metadata?.full_name || u.email?.split('@')[0] || 'New User',
+            name:
+              u.user_metadata?.full_name ||
+              existing?.name ||
+              u.email?.split('@')[0] ||
+              'New User',
             email: u.email,
-            role: isAdminEmail ? 'admin' : 'student',
-            points: 0,
-            level: 1,
-            badges: [],
+            role,
+            points: existing?.points ?? 0,
+            level: existing?.level ?? 1,
+            badges: existing?.badges ?? [],
             updated_at: new Date().toISOString()
           };
 
@@ -41,9 +60,6 @@ if (u) {
             .upsert(profileData, { onConflict: 'id' });
 
           if (error) console.warn('Profile upsert:', error.message);
-
-          const { data: profile } = await supabase.from('profiles').select('role').eq('id', u.id).single();
-          const role = profile?.role || 'student';
           setUserRole(role);
           setCurrentPage('dashboard');
         } else {

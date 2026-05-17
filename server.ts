@@ -831,6 +831,32 @@ app.delete("/api/admin/skills/:id", requireAuth, requireAdmin, async (req, res) 
   }
 });
 
+app.get("/api/admin/users", requireAuth, requireAdmin, async (_req, res) => {
+  try {
+    const { data, error } = await supabaseAdmin!
+      .from("profiles")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+    return res.json({ users: data || [] });
+  } catch (error: any) {
+    return apiError(res, 500, "SERVER_ERROR", "Failed to list users", error.message);
+  }
+});
+
+app.get("/api/admin/resources", requireAuth, requireAdmin, async (_req, res) => {
+  try {
+    const { data, error } = await supabaseAdmin!
+      .from("resources")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+    return res.json({ resources: data || [] });
+  } catch (error: any) {
+    return apiError(res, 500, "SERVER_ERROR", "Failed to list resources", error.message);
+  }
+});
+
 app.post("/api/admin/resources", requireAuth, requireAdmin, async (req, res) => {
   try {
     const parsed = adminResourceSchema.safeParse(req.body);

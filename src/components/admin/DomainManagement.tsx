@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Plus, Edit2, Trash2, Search } from 'lucide-react';
 import { supabase, getAccessToken } from '../../lib/supabase';
 import { normalizeText, isDuplicateDbError } from '../../lib/utils';
@@ -7,6 +7,8 @@ import { AdminModal } from './AdminModal';
 import { AdminInput } from './AdminInput';
 import type { ShowToastFn } from './useToast';
 import { isValidDomainLabel } from '../../lib/inputValidation';
+import { resourcesForDomain, countLabel, type ResourceLike } from '../../lib/resourceLinking';
+import { LearningResourcesPanel } from './LearningResourcesPanel';
 
 interface Domain {
   id: string;
@@ -36,10 +38,25 @@ export function DomainManagement({ showToast }: { showToast: ShowToastFn }) {
     image_url: ''
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [allResources, setAllResources] = useState<ResourceLike[]>([]);
+  const [resourcesLoading, setResourcesLoading] = useState(true);
 
   useEffect(() => {
-    fetchDomains();
+    void Promise.all([fetchDomains(), fetchResources()]);
   }, []);
+
+  async function fetchResources() {
+    try {
+      setResourcesLoading(true);
+      const { data, error } = await supabase.from('resources').select('id, title, url, type, difficulty, domain, skills_covered');
+      if (error) throw error;
+      setAllResources((data || []) as ResourceLike[]);
+    } catch (err: any) {
+      showToast(err.message || 'Failed to load learning resources', 'error');
+    } finally {
+      setResourcesLoading(false);
+    }
+  }
 
   async function fetchDomains() {
     try {
@@ -183,6 +200,15 @@ export function DomainManagement({ showToast }: { showToast: ShowToastFn }) {
     setIsModalOpen(true);
   }
 
+  const previewDomainResources = useMemo(
+    () => resourcesForDomain(allResources, formData.name),
+    [allResources, formData.name]
+  );
+
+  function linkedCountForDomain(domainName: string): number {
+    return resourcesForDomain(allResources, domainName).length;
+  }
+
   const filteredDomains = domains.filter((d) =>
     d.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     d.description.toLowerCase().includes(searchTerm.toLowerCase())
@@ -236,6 +262,13 @@ export function DomainManagement({ showToast }: { showToast: ShowToastFn }) {
             render: (value) => <span className="text-xs text-zinc-400 line-clamp-1">{value}</span>
           },
           {
+            header: 'Learning resources',
+            key: 'id',
+            render: (_id, item) => (
+              <span className="text-xs font-medium text-cyan-400/90">{countLabel(linkedCountForDomain(item.name))}</span>
+            )
+          },
+          {
             header: 'Created',
             key: 'created_at',
             sortable: true,
@@ -269,6 +302,7 @@ export function DomainManagement({ showToast }: { showToast: ShowToastFn }) {
 
       <AdminModal
         isOpen={isModalOpen}
+        wide
         title={editingId ? 'Edit Domain' : 'Add New Domain'}
         onClose={() => {
           setIsModalOpen(false);
@@ -312,6 +346,12 @@ export function DomainManagement({ showToast }: { showToast: ShowToastFn }) {
             />
           </div>
         </div>
+        <LearningResourcesPanel
+          resources={previewDomainResources}
+          loading={resourcesLoading}
+          title="Learning resources in this domain"
+          emptyHint="Resources appear when their Domain field matches this domain name (set in Admin → Resources)."
+        />
       </AdminModal>
 
       <AdminModal

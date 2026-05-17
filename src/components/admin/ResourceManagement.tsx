@@ -66,13 +66,28 @@ export function ResourceManagement({ showToast }: { showToast: ShowToastFn }) {
 
   async function fetchResources() {
     try {
+      const token = await getAccessToken();
+      if (token) {
+        const response = await fetch('/api/admin/resources', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const body = await response.json().catch(() => ({}));
+        if (response.ok && Array.isArray(body.resources)) {
+          setResources(body.resources as Resource[]);
+          return;
+        }
+        if (!response.ok) {
+          console.warn(body?.error?.message || `Admin resources API failed (${response.status})`);
+        }
+      }
+
       const { data, error } = await supabase
         .from('resources')
         .select('*')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setResources(data || []);
+      setResources((data || []) as Resource[]);
     } catch (err: any) {
       showToast(err.message || 'Failed to fetch resources', 'error');
     }
@@ -161,9 +176,40 @@ export function ResourceManagement({ showToast }: { showToast: ShowToastFn }) {
         body: JSON.stringify(dataToSave)
       });
 
-      const responseData = await response.json();
+      const responseData = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(responseData?.error?.message || 'Failed to save resource');
+        const apiMsg = responseData?.error?.message || `API error (${response.status})`;
+        if (response.status === 403) {
+          throw new Error(
+            `${apiMsg} — Your account needs role = admin in Supabase (Table Editor → profiles) and sql/admin_rls_complete.sql applied.`
+          );
+        }
+        // Fallback: direct Supabase write when API unavailable but RLS allows admin
+        const row = {
+          title: dataToSave.title,
+          description: dataToSave.description,
+          url: dataToSave.url,
+          type: dataToSave.type,
+          difficulty: dataToSave.difficulty,
+          duration: dataToSave.duration || null,
+          domain: dataToSave.domain,
+          skills_covered: dataToSave.skills_covered
+        };
+        if (editingId) {
+          const { error } = await supabase.from('resources').update(row).eq('id', editingId);
+          if (error) throw new Error(`${apiMsg} — ${error.message}`);
+        } else {
+          const { error } = await supabase.from('resources').insert(row);
+          if (error) throw new Error(`${apiMsg} — ${error.message}`);
+        }
+        showToast(
+          editingId ? 'Resource updated (direct database)' : 'Resource created (direct database)',
+          'success'
+        );
+        setIsModalOpen(false);
+        resetForm();
+        fetchResources();
+        return;
       }
 
       showToast(editingId ? 'Resource updated successfully' : 'Resource created successfully', 'success');
@@ -240,13 +286,32 @@ export function ResourceManagement({ showToast }: { showToast: ShowToastFn }) {
     setIsModalOpen(true);
   }
 
-  const filteredResources = resources.filter((r) =>
-    r.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    r.description.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredResources = resources.filter((r) => {
+    const q = searchTerm.trim().toLowerCase();
+    if (!q) return true;
+    const haystack = [
+      r.title,
+      r.description,
+      r.domain,
+      r.type,
+      r.difficulty,
+      r.url,
+      ...(r.skills_covered || [])
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+    return haystack.includes(q);
+  });
 
   return (
     <div className="space-y-6">
+      <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+        <p className="text-sm text-zinc-400">
+          Showing <span className="font-bold text-white">{filteredResources.length}</span> of{' '}
+          <span className="font-bold text-white">{resources.length}</span> learning resources
+        </p>
+      </div>
       <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
         <div className="flex-1 max-w-md">
           <div className="relative">
@@ -314,6 +379,20 @@ export function ResourceManagement({ showToast }: { showToast: ShowToastFn }) {
             header: 'Domain',
             key: 'domain',
             render: (value) => value || 'N/A'
+          },
+          {
+            header: 'Skills',
+            key: 'skills_covered',
+            render: (value: string[]) => (
+              <span className="text-xs text-zinc-400 line-clamp-2 max-w-[200px]">
+                {(value || []).length ? (value || []).join(', ') : '—'}
+              </span>
+            )
+          },
+          {
+            header: 'Added',
+            key: 'created_at',
+            render: (value: string) => (value ? new Date(value).toLocaleDateString() : '—')
           }
         ]}
         actions={(resource) => (

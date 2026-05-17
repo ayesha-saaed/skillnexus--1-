@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Edit2, Trash2, Search, Shield, User, Eye, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { supabase } from '../../lib/supabase';
+import { supabase, getAccessToken } from '../../lib/supabase';
 import { AdminTable } from './AdminTable';
 import { AdminModal } from './AdminModal';
 import { AdminSelect } from './AdminSelect';
@@ -97,6 +97,22 @@ export function UserManagement({ showToast, usersNav, onUsersNavConsumed }: User
   const fetchUsers = useCallback(async () => {
     try {
       setLoading(true);
+      const token = await getAccessToken();
+      if (token) {
+        const response = await fetch('/api/admin/users', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const body = await response.json().catch(() => ({}));
+        if (response.ok && Array.isArray(body.users)) {
+          setUsers(body.users as UserProfile[]);
+          return;
+        }
+        if (!response.ok) {
+          const msg = body?.error?.message || `Admin users API failed (${response.status})`;
+          console.warn(msg);
+        }
+      }
+
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
@@ -104,8 +120,18 @@ export function UserManagement({ showToast, usersNav, onUsersNavConsumed }: User
 
       if (error) throw error;
       setUsers((data || []) as UserProfile[]);
+      if ((data || []).length <= 1) {
+        showToast(
+          'Only your profile is visible. Run sql/admin_rls_complete.sql in Supabase and set your account role to admin.',
+          'error'
+        );
+      }
     } catch (err: any) {
-      showToast(err.message || 'Failed to fetch users', 'error');
+      showToast(
+        err.message ||
+          'Failed to fetch users. Run sql/admin_rls_complete.sql and: UPDATE profiles SET role = \'admin\' WHERE email = your@email;',
+        'error'
+      );
     } finally {
       setLoading(false);
     }
