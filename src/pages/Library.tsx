@@ -39,9 +39,10 @@ import {
   Palette,
   Zap
 } from 'lucide-react';
+import type { AppPage } from '../lib/navigation';
 
 interface LibraryProps {
-  onNavigate: (page: string) => void;
+  onNavigate: (page: AppPage) => void;
 }
 
 const DOMAIN_STYLES: DomainStyle[] = [

@@ -7,6 +7,7 @@ import { SkillAgent } from './SkillAgent';
 import { ACTIVE_PATH_EVENT, readActivePathFromStorage } from '../lib/activePath';
 import { isAdminRole } from '../lib/inputValidation';
 import type { AppPage } from '../lib/navigation';
+import type { LucideIcon } from 'lucide-react';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -61,7 +62,7 @@ export function Layout({ children, user, userRole, onNavigate, currentPage }: La
     return () => window.removeEventListener(ACTIVE_PATH_EVENT, onPath);
   }, [refreshActivePathLabel]);
 
-  const menuItems = [
+  const menuItems: { id: AppPage; label: string; icon: LucideIcon }[] = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'add-skill', label: 'My Skills', icon: Code2 },
     { id: 'analysis', label: 'Gap Checker', icon: BarChart3 },
@@ -70,7 +71,7 @@ export function Layout({ children, user, userRole, onNavigate, currentPage }: La
   ];
 
   if (isAdminRole(userRole)) {
-    menuItems.push({ id: 'admin' as const, label: 'Admin Panel', icon: ShieldCheck });
+    menuItems.push({ id: 'admin', label: 'Admin Panel', icon: ShieldCheck });
   }
 
   return (

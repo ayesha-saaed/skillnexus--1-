@@ -1,9 +1,10 @@
 import React from 'react';
 import { Github, Users, ExternalLink } from 'lucide-react';
 import { InfoPageShell } from '../components/InfoPageShell';
+import type { AppPage } from '../lib/navigation';
 
 interface CommunityProps {
-  onNavigate: (page: string) => void;
+  onNavigate: (page: AppPage) => void;
 }
 
 export function Community({ onNavigate }: CommunityProps) {

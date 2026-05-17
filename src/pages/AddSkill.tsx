@@ -4,7 +4,9 @@ import { motion } from 'motion/react';
 import { Plus, Trash2, Search, Award, BarChart3, BookOpen, TrendingUp } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { gamificationService } from '../services/gamificationService';
-import { learningService } from '../services/learningService';
+import { learningService, type LearningTrack } from '../services/learningService';
+import { LearningActivityFeed } from '../components/learning/LearningActivityFeed';
+import { Progress } from '../components/ui/Progress';
 import { skillTokenError, isValidProficiency } from '../lib/inputValidation';
 
 interface AddSkillProps {
@@ -19,8 +21,8 @@ export function AddSkill({ onNavigate, user }: AddSkillProps) {
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [skillFieldError, setSkillFieldError] = useState('');
-  const [learningStats, setLearningStats] = useState({ completedCount: 0, totalEnrolled: 0, totalTime: 0 });
-  const [skillEventCount, setSkillEventCount] = useState(0);
+  const [learningTrack, setLearningTrack] = useState<LearningTrack | null>(null);
+  const [trackLoading, setTrackLoading] = useState(true);
 
   useEffect(() => {
     fetchSkills();
@@ -29,20 +31,14 @@ export function AddSkill({ onNavigate, user }: AddSkillProps) {
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      setTrackLoading(true);
       try {
-        const analytics = await learningService.getLearningAnalytics(user.id);
-        if (!cancelled) setLearningStats(analytics);
+        const track = await learningService.getLearningTrack(user.id);
+        if (!cancelled) setLearningTrack(track);
       } catch {
-        if (!cancelled) setLearningStats({ completedCount: 0, totalEnrolled: 0, totalTime: 0 });
-      }
-      try {
-        const { count, error } = await supabase
-          .from('skill_development_events')
-          .select('*', { count: 'exact', head: true })
-          .eq('user_id', user.id);
-        if (!cancelled && !error && typeof count === 'number') setSkillEventCount(count);
-      } catch {
-        /* table may not exist until SQL bundle is applied */
+        if (!cancelled) setLearningTrack(null);
+      } finally {
+        if (!cancelled) setTrackLoading(false);
       }
     })();
     return () => {
@@ -232,23 +228,44 @@ export function AddSkill({ onNavigate, user }: AddSkillProps) {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="theme-card">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-2">Learning progress</p>
-          <div className="flex items-baseline gap-2">
-            <span className="text-3xl font-black text-emerald-400">{learningStats.completedCount}</span>
-            <span className="text-[10px] text-zinc-500 uppercase font-bold">completed</span>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-3">Learning progress</p>
+          <div className="flex items-baseline gap-2 mb-3">
+            <span className="text-3xl font-black text-emerald-400">
+              {learningTrack?.summary.completionRate ?? 0}%
+            </span>
+            <span className="text-[10px] text-zinc-500 uppercase font-bold">completion rate</span>
           </div>
-          <p className="mt-2 text-[11px] text-zinc-400">
-            {learningStats.totalEnrolled} resources tracked · {learningStats.totalTime || 0} min logged
+          <Progress
+            value={learningTrack?.summary.completionRate ?? 0}
+            className="h-1.5 bg-white/10 mb-3"
+            indicatorClassName="bg-emerald-500"
+          />
+          <p className="text-[11px] text-zinc-400 mb-4">
+            {learningTrack?.summary.completedCount ?? 0} completed ·{' '}
+            {learningTrack?.summary.inProgressCount ?? 0} in progress ·{' '}
+            {learningTrack?.summary.totalTime ?? 0} min logged
           </p>
+          <LearningActivityFeed
+            items={learningTrack?.recentProgress ?? []}
+            loading={trackLoading}
+            compact
+            showProgressBar
+            emptyMessage="No learning activity yet."
+          />
         </div>
         <div className="theme-card">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-2">Skill development log</p>
-          <div className="flex items-baseline gap-2">
-            <span className="text-3xl font-black text-blue-400">{skillEventCount}</span>
-            <span className="text-[10px] text-zinc-500 uppercase font-bold">events</span>
-          </div>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-3">Skill development log</p>
+          <p className="text-[11px] text-zinc-400 mb-4">
+            {learningTrack?.summary.skillsCount ?? skills.length} skills on your profile
+          </p>
+          <LearningActivityFeed
+            items={learningTrack?.recentSkillEvents ?? []}
+            loading={trackLoading}
+            compact
+            emptyMessage="No learning activity yet."
+          />
         </div>
         <div className="theme-card flex flex-col justify-between">
           <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-2">Quick actions</p>

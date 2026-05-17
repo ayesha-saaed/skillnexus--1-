@@ -27,7 +27,7 @@ export default function App() {
     const unsubscribe = onAuthStateChanged(async (u) => {
       try {
         setUser(u);
-if (u) {
+        if (u) {
           const adminEmails = (import.meta.env.VITE_ADMIN_EMAILS || '')
             .split(',')
             .map((e: string) => e.trim().toLowerCase())

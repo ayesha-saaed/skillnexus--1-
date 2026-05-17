@@ -1,9 +1,10 @@
 import React from 'react';
 import { Code2, Shield, Server } from 'lucide-react';
 import { InfoPageShell } from '../components/InfoPageShell';
+import type { AppPage } from '../lib/navigation';
 
 interface ApiReferenceProps {
-  onNavigate: (page: string) => void;
+  onNavigate: (page: AppPage) => void;
 }
 
 const endpoints = [

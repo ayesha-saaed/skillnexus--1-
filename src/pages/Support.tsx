@@ -1,9 +1,10 @@
 import React from 'react';
 import { Mail, MessageCircle, BookOpen, LifeBuoy } from 'lucide-react';
 import { InfoPageShell } from '../components/InfoPageShell';
+import type { AppPage } from '../lib/navigation';
 
 interface SupportProps {
-  onNavigate: (page: string) => void;
+  onNavigate: (page: AppPage) => void;
 }
 
 export function Support({ onNavigate }: SupportProps) {

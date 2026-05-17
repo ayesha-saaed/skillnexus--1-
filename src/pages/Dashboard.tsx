@@ -20,7 +20,8 @@ import {
   GraduationCap,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { learningService } from '../services/learningService';
+import { learningService, type LearningTrack } from '../services/learningService';
+import { LearningActivityFeed } from '../components/learning/LearningActivityFeed';
 
 // ─── Proper TypeScript Interfaces ───
 interface UserSkill {
@@ -122,11 +123,8 @@ export const Dashboard = React.memo(function Dashboard({ user, onNavigate }: Das
     activeCourses: 0,
     openGaps: 0,
   });
-  const [learningAnalytics, setLearningAnalytics] = useState({
-    completedCount: 0,
-    totalEnrolled: 0,
-    totalTime: 0,
-  });
+  const [learningTrack, setLearningTrack] = useState<LearningTrack | null>(null);
+  const [learningTrackLoading, setLearningTrackLoading] = useState(true);
 
 
   useEffect(() => {
@@ -134,6 +132,7 @@ export const Dashboard = React.memo(function Dashboard({ user, onNavigate }: Das
 
     async function fetchData() {
       setLoading(true);
+      setLearningTrackLoading(true);
       try {
         // ✅ Parallel queries instead of sequential
         const [skillsRes, progRes, profileRes] = await Promise.all([
@@ -149,10 +148,12 @@ export const Dashboard = React.memo(function Dashboard({ user, onNavigate }: Das
         if (profileRes.error) throw profileRes.error;
 
         try {
-          const analytics = await learningService.getLearningAnalytics(user.id);
-          if (!cancelled) setLearningAnalytics(analytics);
+          const track = await learningService.getLearningTrack(user.id);
+          if (!cancelled) setLearningTrack(track);
         } catch {
-          if (!cancelled) setLearningAnalytics({ completedCount: 0, totalEnrolled: 0, totalTime: 0 });
+          if (!cancelled) setLearningTrack(null);
+        } finally {
+          if (!cancelled) setLearningTrackLoading(false);
         }
 
         const skillsData = (skillsRes.data || []).map((d: any) => ({
@@ -365,19 +366,32 @@ export const Dashboard = React.memo(function Dashboard({ user, onNavigate }: Das
             <GraduationCap className="w-4 h-4 text-emerald-400" />
             Learning &amp; skill development
           </h2>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="rounded-lg border border-white/5 bg-black/20 p-3 text-center">
-              <p className="text-2xl font-black text-emerald-400">{learningAnalytics.completedCount}</p>
+              <p className="text-2xl font-black text-emerald-400">{learningTrack?.summary.completedCount ?? 0}</p>
               <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-500 mt-1">Done</p>
             </div>
             <div className="rounded-lg border border-white/5 bg-black/20 p-3 text-center">
-              <p className="text-2xl font-black text-blue-400">{learningAnalytics.totalEnrolled}</p>
-              <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-500 mt-1">Enrolled</p>
+              <p className="text-2xl font-black text-blue-400">{learningTrack?.summary.inProgressCount ?? 0}</p>
+              <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-500 mt-1">In progress</p>
             </div>
             <div className="rounded-lg border border-white/5 bg-black/20 p-3 text-center">
-              <p className="text-2xl font-black text-amber-400">{learningAnalytics.totalTime}</p>
+              <p className="text-2xl font-black text-violet-400">{learningTrack?.summary.skillsCount ?? 0}</p>
+              <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-500 mt-1">Skills</p>
+            </div>
+            <div className="rounded-lg border border-white/5 bg-black/20 p-3 text-center">
+              <p className="text-2xl font-black text-amber-400">{learningTrack?.summary.totalTime ?? 0}</p>
               <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-500 mt-1">Minutes</p>
             </div>
+          </div>
+          <div className="mt-5">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-3">Recent activity</p>
+            <LearningActivityFeed
+              items={learningTrack?.recentActivity ?? []}
+              loading={learningTrackLoading}
+              compact
+              showProgressBar
+            />
           </div>
           <button
             type="button"
