@@ -18,7 +18,6 @@ import {
   PlusCircle,
   Loader2,
   GraduationCap,
-  LineChart,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { learningService } from '../services/learningService';
@@ -362,13 +361,10 @@ export const Dashboard = React.memo(function Dashboard({ user, onNavigate }: Das
         </div>
 
         <div className="theme-card">
-          <h2 className="text-sm font-bold text-white uppercase tracking-widest mb-2 flex items-center gap-2">
+          <h2 className="text-sm font-bold text-white uppercase tracking-widest mb-5 flex items-center gap-2">
             <GraduationCap className="w-4 h-4 text-emerald-400" />
             Learning &amp; skill development
           </h2>
-          <p className="text-[11px] text-zinc-500 leading-relaxed mb-5">
-            Library progress plus a timeline when skill events are enabled in Supabase.
-          </p>
           <div className="grid grid-cols-3 gap-3">
             <div className="rounded-lg border border-white/5 bg-black/20 p-3 text-center">
               <p className="text-2xl font-black text-emerald-400">{learningAnalytics.completedCount}</p>
@@ -382,13 +378,6 @@ export const Dashboard = React.memo(function Dashboard({ user, onNavigate }: Das
               <p className="text-2xl font-black text-amber-400">{learningAnalytics.totalTime}</p>
               <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-500 mt-1">Minutes</p>
             </div>
-          </div>
-          <div className="mt-5 border-t border-white/5 pt-5">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-3 flex items-center gap-2">
-              <LineChart className="w-3.5 h-3.5" />
-              Recent skill activity
-            </p>
-            <p className="text-[10px] text-zinc-600 uppercase tracking-widest">No skill timeline rows yet (run SQL bundle if needed).</p>
           </div>
           <button
             type="button"

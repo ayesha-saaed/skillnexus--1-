@@ -249,9 +249,6 @@ export function AddSkill({ onNavigate, user }: AddSkillProps) {
             <span className="text-3xl font-black text-blue-400">{skillEventCount}</span>
             <span className="text-[10px] text-zinc-500 uppercase font-bold">events</span>
           </div>
-          <p className="mt-2 text-[11px] text-zinc-400">
-            Adds and removes are recorded when the skill timeline table is enabled in Supabase.
-          </p>
         </div>
         <div className="theme-card flex flex-col justify-between">
           <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-2">Quick actions</p>
