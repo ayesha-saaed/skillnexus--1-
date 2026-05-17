@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, Search, Info } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Plus, Edit2, Trash2, Search } from 'lucide-react';
 import { supabase, getAccessToken } from '../../lib/supabase';
 import { normalizeText, isDuplicateDbError } from '../../lib/utils';
 import { AdminTable } from './AdminTable';
@@ -7,7 +7,9 @@ import { AdminModal } from './AdminModal';
 import { AdminInput } from './AdminInput';
 import { AdminSelect } from './AdminSelect';
 import type { ShowToastFn } from './useToast';
-import { isValidDisplayName } from '../../lib/inputValidation';
+import { isValidDisplayName, isValidResourceDescription } from '../../lib/inputValidation';
+import { resourcesForSkill, countLabel, type ResourceLike } from '../../lib/resourceLinking';
+import { LearningResourcesPanel } from './LearningResourcesPanel';
 
 interface Skill {
   id: string;
@@ -23,7 +25,7 @@ interface Domain {
   name: string;
 }
 
-interface LearnerSkillRow {
+interface UserSkillRow {
   id: string;
   skill_name: string;
   proficiency: string;
@@ -34,10 +36,10 @@ interface LearnerSkillRow {
 
 export function SkillManagement({ showToast }: { showToast: ShowToastFn }) {
   const [skills, setSkills] = useState<Skill[]>([]);
-  const [learnerSkills, setLearnerSkills] = useState<LearnerSkillRow[]>([]);
+  const [userSkills, setUserSkills] = useState<UserSkillRow[]>([]);
   const [domains, setDomains] = useState<Domain[]>([]);
   const [loading, setLoading] = useState(true);
-  const [learnerLoading, setLearnerLoading] = useState(true);
+  const [userSkillsLoading, setUserSkillsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -49,20 +51,48 @@ export function SkillManagement({ showToast }: { showToast: ShowToastFn }) {
     domain_id: ''
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [allResources, setAllResources] = useState<ResourceLike[]>([]);
+  const [resourcesLoading, setResourcesLoading] = useState(true);
 
   useEffect(() => {
-    void Promise.all([fetchSkills(), fetchDomains(), fetchLearnerSkills()]);
+    void Promise.all([fetchSkills(), fetchDomains(), fetchUserSkills(), fetchResources()]);
   }, []);
 
-  async function fetchLearnerSkills() {
+  async function fetchResources() {
     try {
-      setLearnerLoading(true);
+      setResourcesLoading(true);
+      const token = await getAccessToken();
+      if (token) {
+        const response = await fetch('/api/admin/resources', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const body = await response.json().catch(() => ({}));
+        if (response.ok && Array.isArray(body.resources)) {
+          setAllResources(body.resources as ResourceLike[]);
+          return;
+        }
+      }
+      const { data, error } = await supabase
+        .from('resources')
+        .select('id, title, url, type, difficulty, domain, skills_covered');
+      if (error) throw error;
+      setAllResources((data || []) as ResourceLike[]);
+    } catch (err: any) {
+      showToast(err.message || 'Failed to load learning resources', 'error');
+    } finally {
+      setResourcesLoading(false);
+    }
+  }
+
+  async function fetchUserSkills() {
+    try {
+      setUserSkillsLoading(true);
       const { data, error } = await supabase
         .from('user_skills')
         .select('id, skill_name, proficiency, updated_at, user_id, profiles(name, email)')
         .order('updated_at', { ascending: false });
       if (error) throw error;
-      const normalizedData = (data || []).map((row: any): LearnerSkillRow => ({
+      const normalizedData = (data || []).map((row: any): UserSkillRow => ({
         id: row.id,
         skill_name: row.skill_name,
         proficiency: row.proficiency,
@@ -70,14 +100,14 @@ export function SkillManagement({ showToast }: { showToast: ShowToastFn }) {
         user_id: row.user_id,
         profiles: Array.isArray(row.profiles) ? row.profiles[0] : row.profiles || null
       }));
-      setLearnerSkills(normalizedData);
+      setUserSkills(normalizedData);
     } catch (err: any) {
       showToast(
-        err.message || 'Failed to load learner skills. Run sql/user_skills_admin_rls.sql in Supabase if you are admin.',
+        err.message || 'Failed to load user skills. Run sql/user_skills_admin_rls.sql in Supabase if you are admin.',
         'error'
       );
     } finally {
-      setLearnerLoading(false);
+      setUserSkillsLoading(false);
     }
   }
 
@@ -115,6 +145,9 @@ export function SkillManagement({ showToast }: { showToast: ShowToastFn }) {
         "Use 2–80 characters; start with a letter, number, or . + #; then letters, numbers, spaces, and -+#.() and apostrophe (').";
     }
     if (!formData.description.trim()) newErrors.description = 'Description is required';
+    else if (!isValidResourceDescription(formData.description.trim())) {
+      newErrors.description = 'Description must be 10–2000 characters with no control characters.';
+    }
     // domain_id is optional: lets you add catalog skills before any domains exist in the DB
     setErrors(newErrors);
     if (Object.keys(newErrors).length) return Object.values(newErrors)[0];
@@ -239,22 +272,21 @@ export function SkillManagement({ showToast }: { showToast: ShowToastFn }) {
     s.description.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const previewLinkedResources = useMemo(() => {
+    if (!formData.name.trim()) return [];
+    return resourcesForSkill(allResources, formData.name.trim());
+  }, [allResources, formData.name]);
+
+  function linkedCountForSkill(skill: Skill): number {
+    return resourcesForSkill(allResources, skill.name).length;
+  }
+
   return (
     <div className="space-y-6">
-      <div className="flex gap-2 items-start p-3 rounded-lg border border-blue-500/20 bg-blue-500/5 text-zinc-300 text-xs">
-        <Info className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
-        <p>
-          <span className="text-zinc-200 font-medium">My Skills (app)</span> saves to the{' '}
-          <code className="text-zinc-400">user_skills</code> table.{' '}
-          <span className="text-zinc-200 font-medium">Curated catalog</span> uses the <code className="text-zinc-400">skills</code> table. Domain is
-          optional: you can save a skill with &quot;Unassigned&quot; even before the Domains table is filled.
-        </p>
-      </div>
-
       <div>
-        <h2 className="text-sm font-bold text-white uppercase tracking-widest mb-3">Learner skills (My Skills page)</h2>
-        <AdminTable<LearnerSkillRow>
-          data={learnerSkills}
+        <h2 className="text-sm font-bold text-white uppercase tracking-widest mb-3">User skills (My Skills page)</h2>
+        <AdminTable<UserSkillRow>
+          data={userSkills}
           columns={[
             { header: 'Skill', key: 'skill_name', sortable: true },
             { header: 'Level', key: 'proficiency' },
@@ -274,8 +306,8 @@ export function SkillManagement({ showToast }: { showToast: ShowToastFn }) {
               render: (value) => new Date(value as string).toLocaleString()
             }
           ]}
-          loading={learnerLoading}
-          emptyMessage="No learner skills yet, or admin cannot read user_skills (apply RLS SQL)."
+          loading={userSkillsLoading}
+          emptyMessage="No user skills yet, or admin cannot read user_skills (apply RLS SQL)."
         />
       </div>
 
@@ -324,6 +356,13 @@ export function SkillManagement({ showToast }: { showToast: ShowToastFn }) {
             render: (value) => <span className="text-xs text-zinc-400 line-clamp-1">{value}</span>
           },
           {
+            header: 'Learning resources',
+            key: 'id',
+            render: (_id, skill) => (
+              <span className="text-xs font-medium text-cyan-400/90">{countLabel(linkedCountForSkill(skill))}</span>
+            )
+          },
+          {
             header: 'Created',
             key: 'created_at',
             render: (value) => new Date(value).toLocaleDateString()
@@ -356,6 +395,7 @@ export function SkillManagement({ showToast }: { showToast: ShowToastFn }) {
 
       <AdminModal
         isOpen={isModalOpen}
+        wide
         title={editingId ? 'Edit Skill' : 'Add New Skill'}
         onClose={() => {
           setIsModalOpen(false);
@@ -393,6 +433,13 @@ export function SkillManagement({ showToast }: { showToast: ShowToastFn }) {
           placeholder="What will students learn?"
           error={errors.description}
           required
+        />
+        <LearningResourcesPanel
+          title="Linked learning resources"
+          resources={previewLinkedResources}
+          loading={resourcesLoading}
+          listMaxHeightClass="max-h-56"
+          emptyHint="Add resources in Admin → Resources with this skill in Skills covered, or run sql/seed_learning_resources_by_skill.sql."
         />
       </AdminModal>
 

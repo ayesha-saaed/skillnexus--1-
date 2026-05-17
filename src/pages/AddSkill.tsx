@@ -5,7 +5,7 @@ import { Plus, Trash2, Search, Award, BarChart3, BookOpen, TrendingUp } from 'lu
 import { cn } from '../lib/utils';
 import { gamificationService } from '../services/gamificationService';
 import { learningService } from '../services/learningService';
-import { isValidSkillToken } from '../lib/inputValidation';
+import { isValidSkillToken, isValidProficiency } from '../lib/inputValidation';
 
 interface AddSkillProps {
   onNavigate: (page: any) => void;
@@ -75,6 +75,10 @@ export function AddSkill({ onNavigate, user }: AddSkillProps) {
       setErrorMessage(
         "Skill name must be 2–80 characters; start with a letter, number, or . + #; then letters, numbers, spaces, and -+#.() and apostrophe (')."
       );
+      return;
+    }
+    if (!isValidProficiency(proficiency)) {
+      setErrorMessage('Choose a valid proficiency: Beginner, Intermediate, Advanced, or Expert.');
       return;
     }
     setLoading(true);

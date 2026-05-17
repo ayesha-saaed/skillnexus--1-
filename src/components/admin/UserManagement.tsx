@@ -11,6 +11,10 @@ import {
   isValidDisplayName,
   isValidDomainLabel,
   isValidSkillToken,
+  isValidProfileRole,
+  isValidProficiency,
+  isAdminRole,
+  normalizeProfileRole,
   validateCommaSeparatedBadges
 } from '../../lib/inputValidation';
 import type { AdminTabNavigateOptions } from './adminTab';
@@ -30,7 +34,7 @@ interface UserProfile {
   active_path_domain?: string | null;
 }
 
-interface LearnerSkillRow {
+interface UserSkillRow {
   id: string;
   skill_name: string;
   proficiency: string;
@@ -40,6 +44,10 @@ interface LearnerSkillRow {
 interface JobRoleOption {
   id: string;
   role_name: string;
+}
+
+function normalizeUserRow(row: UserProfile): UserProfile {
+  return { ...row, role: normalizeProfileRole(row.role) };
 }
 
 const PROFICIENCY_OPTIONS = [
@@ -64,7 +72,7 @@ export function UserManagement({ showToast, usersNav, onUsersNavConsumed }: User
   const [filterRole, setFilterRole] = useState<string>('all');
 
   const [detailsUser, setDetailsUser] = useState<UserProfile | null>(null);
-  const [detailSkills, setDetailSkills] = useState<LearnerSkillRow[]>([]);
+  const [detailSkills, setDetailSkills] = useState<UserSkillRow[]>([]);
   const [detailSkillsLoading, setDetailSkillsLoading] = useState(false);
   const [jobRoles, setJobRoles] = useState<JobRoleOption[]>([]);
   const [savingProfile, setSavingProfile] = useState(false);
@@ -104,7 +112,7 @@ export function UserManagement({ showToast, usersNav, onUsersNavConsumed }: User
         });
         const body = await response.json().catch(() => ({}));
         if (response.ok && Array.isArray(body.users)) {
-          setUsers(body.users as UserProfile[]);
+          setUsers((body.users as UserProfile[]).map(normalizeUserRow));
           return;
         }
         if (!response.ok) {
@@ -119,7 +127,7 @@ export function UserManagement({ showToast, usersNav, onUsersNavConsumed }: User
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setUsers((data || []) as UserProfile[]);
+      setUsers(((data || []) as UserProfile[]).map(normalizeUserRow));
       if ((data || []).length <= 1) {
         showToast(
           'Only your profile is visible. Run sql/admin_rls_complete.sql in Supabase and set your account role to admin.',
@@ -147,7 +155,7 @@ export function UserManagement({ showToast, usersNav, onUsersNavConsumed }: User
           .eq('user_id', userId)
           .order('updated_at', { ascending: false });
         if (error) throw error;
-        setDetailSkills((data || []) as LearnerSkillRow[]);
+        setDetailSkills((data || []) as UserSkillRow[]);
       } catch (err: any) {
         showToast(err.message || 'Failed to load user skills', 'error');
         setDetailSkills([]);
@@ -195,7 +203,7 @@ export function UserManagement({ showToast, usersNav, onUsersNavConsumed }: User
     setProfileErrors({});
     setProfileForm({
       name: user.name || '',
-      role: user.role || 'student',
+      role: normalizeProfileRole(user.role),
       level: String(user.level ?? 1),
       points: String(user.points ?? 0),
       badges: (user.badges || []).join(', '),
@@ -222,10 +230,15 @@ export function UserManagement({ showToast, usersNav, onUsersNavConsumed }: User
 
   async function handleRoleUpdate() {
     if (!editingId || !formData.role) return;
+    if (!isValidProfileRole(formData.role)) {
+      showToast('Invalid role. Choose student, admin, or moderator.', 'error');
+      return;
+    }
+    const role = normalizeProfileRole(formData.role);
 
     try {
       setLoading(true);
-      const { error } = await supabase.from('profiles').update({ role: formData.role }).eq('id', editingId);
+      const { error } = await supabase.from('profiles').update({ role }).eq('id', editingId);
 
       if (error) throw error;
       showToast('User role updated successfully', 'success');
@@ -274,6 +287,9 @@ export function UserManagement({ showToast, usersNav, onUsersNavConsumed }: User
     }
     const badgesCheck = validateCommaSeparatedBadges(profileForm.badges);
     if (!badgesCheck.ok) errs.badges = badgesCheck.error;
+    if (!isValidProfileRole(profileForm.role)) {
+      errs.role = 'Role must be student, admin, or moderator.';
+    }
     const levelNum = Math.max(1, parseInt(profileForm.level, 10) || 1);
     const pointsNum = Math.max(0, parseInt(profileForm.points, 10) || 0);
     setProfileErrors(errs);
@@ -292,7 +308,7 @@ export function UserManagement({ showToast, usersNav, onUsersNavConsumed }: User
         .from('profiles')
         .update({
           name: profileForm.name.trim(),
-          role: profileForm.role,
+          role: normalizeProfileRole(profileForm.role),
           level: levelNum,
           points: pointsNum,
           badges,
@@ -308,11 +324,11 @@ export function UserManagement({ showToast, usersNav, onUsersNavConsumed }: User
       await fetchUsers();
       const { data: fresh } = await supabase.from('profiles').select('*').eq('id', detailsUser.id).single();
       if (fresh) {
-        const u = fresh as UserProfile;
+        const u = normalizeUserRow(fresh as UserProfile);
         setDetailsUser(u);
         setProfileForm({
           name: u.name || '',
-          role: u.role || 'student',
+          role: u.role,
           level: String(u.level ?? 1),
           points: String(u.points ?? 0),
           badges: (u.badges || []).join(', '),
@@ -337,6 +353,10 @@ export function UserManagement({ showToast, usersNav, onUsersNavConsumed }: User
       );
       return;
     }
+    if (!isValidProficiency(newSkillProficiency)) {
+      showToast('Invalid proficiency level.', 'error');
+      return;
+    }
     try {
       const { error } = await supabase.from('user_skills').insert({
         user_id: detailsUser.id,
@@ -357,7 +377,7 @@ export function UserManagement({ showToast, usersNav, onUsersNavConsumed }: User
     }
   }
 
-  async function handleSkillProficiencyChange(row: LearnerSkillRow, proficiency: string) {
+  async function handleSkillProficiencyChange(row: UserSkillRow, proficiency: string) {
     if (!detailsUser) return;
     try {
       const { error } = await supabase
@@ -390,7 +410,7 @@ export function UserManagement({ showToast, usersNav, onUsersNavConsumed }: User
       (u.name || '').toLowerCase().includes(q) ||
       (u.email || '').toLowerCase().includes(q) ||
       u.id.toLowerCase().includes(q);
-    const matchesRole = filterRole === 'all' || u.role === filterRole;
+    const matchesRole = filterRole === 'all' || normalizeProfileRole(u.role) === filterRole;
     return matchesSearch && matchesRole;
   });
 
@@ -411,14 +431,16 @@ export function UserManagement({ showToast, usersNav, onUsersNavConsumed }: User
             <Shield className="w-4 h-4" />
             <span className="text-xs font-bold uppercase tracking-widest">Admins</span>
           </div>
-          <p className="text-2xl font-black text-white">{users.filter((u) => u.role === 'admin').length}</p>
+          <p className="text-2xl font-black text-white">{users.filter((u) => isAdminRole(u.role)).length}</p>
         </div>
         <div className="bg-white/2 border border-white/10 rounded-lg p-4">
           <div className="flex items-center gap-2 text-purple-400 mb-2">
             <User className="w-4 h-4" />
             <span className="text-xs font-bold uppercase tracking-widest">Students</span>
           </div>
-          <p className="text-2xl font-black text-white">{users.filter((u) => u.role === 'student').length}</p>
+          <p className="text-2xl font-black text-white">
+            {users.filter((u) => normalizeProfileRole(u.role) === 'student').length}
+          </p>
         </div>
       </div>
 
@@ -475,19 +497,22 @@ export function UserManagement({ showToast, usersNav, onUsersNavConsumed }: User
           {
             header: 'Role',
             key: 'role',
-            render: (value) => (
-              <span
-                className={`px-2 py-1 rounded-full text-xs font-medium ${
-                  value === 'admin'
-                    ? 'bg-red-600/20 text-red-300'
-                    : value === 'moderator'
-                      ? 'bg-orange-600/20 text-orange-300'
-                      : 'bg-blue-600/20 text-blue-300'
-                }`}
-              >
-                {String(value).charAt(0).toUpperCase() + String(value).slice(1)}
-              </span>
-            )
+            render: (value) => {
+              const role = normalizeProfileRole(value);
+              return (
+                <span
+                  className={`px-2 py-1 rounded-full text-xs font-medium ${
+                    role === 'admin'
+                      ? 'bg-red-600/20 text-red-300'
+                      : role === 'moderator'
+                        ? 'bg-orange-600/20 text-orange-300'
+                        : 'bg-blue-600/20 text-blue-300'
+                  }`}
+                >
+                  {role.charAt(0).toUpperCase() + role.slice(1)}
+                </span>
+              );
+            }
           },
           {
             header: 'Level',
@@ -567,7 +592,7 @@ export function UserManagement({ showToast, usersNav, onUsersNavConsumed }: User
         loading={loading}
       >
         <p className="text-zinc-300 text-sm">
-          Remove this user&apos;s profile from the database? Related learner skills are removed by cascade. The auth account may
+          Remove this user&apos;s profile from the database? Related user skills are removed by cascade. The auth account may
           still exist until cleaned up in Supabase Auth.
         </p>
       </AdminModal>
@@ -682,7 +707,7 @@ export function UserManagement({ showToast, usersNav, onUsersNavConsumed }: User
                   </section>
 
                   <section className="space-y-4">
-                    <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-400">Learner skills (My Skills)</h3>
+                    <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-400">User skills (My Skills)</h3>
                     <div className="flex flex-wrap gap-2 items-end">
                       <div className="flex-1 min-w-[200px]">
                         <label className="block text-sm font-medium text-zinc-300 mb-2">Add skill</label>

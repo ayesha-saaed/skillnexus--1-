@@ -242,11 +242,13 @@ export function SkillAnalysis({ user, onNavigate }: SkillAnalysisProps): React.J
     // Persist active path
     const currentUser = await getCurrentUser();
     if (currentUser?.id) {
+      const dbRoleId = domain.id.startsWith('job-') ? undefined : domain.id;
       persistActivePath({
+        id: dbRoleId,
         roleName: domain.name,
         domain: domain.domain,
-        missingSkills: missingSkills.map(m => m.name),
-        weakSkills: weakSkills.map(w => w.name),
+        missingSkills: missingSkills.map((m) => m.name),
+        weakSkills: weakSkills.map((w) => w.name)
       } as ActivePathPayload, currentUser.id);
     }
 

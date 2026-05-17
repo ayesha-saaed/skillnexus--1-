@@ -1,4 +1,4 @@
- import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { onAuthStateChanged, User, supabase } from './lib/firebase';
 import { Layout } from './components/Layout';
 import { Login } from './pages/Login';
@@ -8,29 +8,33 @@ import { SkillAnalysis } from './pages/SkillAnalysis';
 import { IndustryTrends } from './pages/IndustryTrends';
 import { AddSkill } from './pages/AddSkill';
 import { Library } from './pages/Library';
-import { Admin } from './pages/Admin';
+import { Support } from './pages/Support';
+import { ApiReference } from './pages/ApiReference';
+import { Community } from './pages/Community';
 import { AdminDashboard } from './components/admin/AdminDashboard';
 import { motion, AnimatePresence } from 'motion/react';
+import { normalizeProfileRole } from './lib/inputValidation';
+import type { AppPage } from './lib/navigation';
+import { usesMainLayout } from './lib/navigation';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [currentPage, setCurrentPage] = useState<'dashboard' | 'login' | 'register' | 'analysis' | 'trends' | 'add-skill' | 'library' | 'admin'>('login');
+  const [currentPage, setCurrentPage] = useState<AppPage>('login');
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(async (u) => {
       try {
         setUser(u);
 if (u) {
-          const adminEmails = (
-            import.meta.env.VITE_ADMIN_EMAILS ||
-            'saeedayesha995@gmail.com,fazeelmaqsood38@gmail.com,ayeshrao2004@gmail.com'
-          )
+          const adminEmails = (import.meta.env.VITE_ADMIN_EMAILS || '')
             .split(',')
             .map((e: string) => e.trim().toLowerCase())
             .filter(Boolean);
-          const isAdminEmail = adminEmails.includes((u.email || '').toLowerCase());
+          const emailLower = (u.email || '').toLowerCase();
+          const isBootstrapAdmin =
+            adminEmails.length > 0 && adminEmails.includes(emailLower);
 
           const { data: existing } = await supabase
             .from('profiles')
@@ -38,7 +42,11 @@ if (u) {
             .eq('id', u.id)
             .maybeSingle();
 
-          const role = isAdminEmail ? 'admin' : existing?.role || 'student';
+          const role = existing
+            ? normalizeProfileRole(existing.role)
+            : isBootstrapAdmin
+              ? 'admin'
+              : 'student';
 
           const profileData = {
             id: u.id,
@@ -97,6 +105,9 @@ if (u) {
       case 'add-skill': return <AddSkill onNavigate={setCurrentPage} user={user!} />;
       case 'library': return <Library onNavigate={setCurrentPage} />;
       case 'admin': return <AdminDashboard onNavigate={setCurrentPage} />;
+      case 'support': return <Support onNavigate={setCurrentPage} />;
+      case 'api-reference': return <ApiReference onNavigate={setCurrentPage} />;
+      case 'community': return <Community onNavigate={setCurrentPage} />;
       default: return <Login onNavigate={setCurrentPage} />;
     }
   };
@@ -104,8 +115,8 @@ if (u) {
   return (
     <div className="min-h-screen bg-zinc-50 font-sans text-zinc-900 overflow-x-hidden">
       <AnimatePresence mode="wait">
-        {user && currentPage !== 'login' && currentPage !== 'register' && currentPage !== 'admin' ? (
-          <Layout user={user} userRole={userRole} onNavigate={setCurrentPage} currentPage={currentPage}>
+        {usesMainLayout(currentPage, Boolean(user)) ? (
+          <Layout user={user!} userRole={userRole} onNavigate={setCurrentPage} currentPage={currentPage}>
             <motion.div
               key={currentPage}
               initial={{ opacity: 0, y: 10 }}

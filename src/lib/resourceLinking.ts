@@ -88,6 +88,29 @@ export function resourcesForDomain(resources: ResourceLike[], domainName: string
     .sort((a, b) => a.title.localeCompare(b.title));
 }
 
+/** Resources that list this catalog skill in skills_covered. */
+export function resourcesForSkill(resources: ResourceLike[], skillName: string): LinkedResource[] {
+  const target = normLabel(normalizeSkill(skillName));
+  if (!target) return [];
+
+  return resources
+    .filter((res) => {
+      const skills = res.skills_covered || [];
+      return skills.some((s) => normLabel(normalizeSkill(s)) === target);
+    })
+    .map((res) => ({
+      id: res.id,
+      title: res.title,
+      url: res.url,
+      type: res.type || 'Course',
+      difficulty: res.difficulty || 'Beginner',
+      domain: res.domain || '',
+      skills_covered: res.skills_covered || [],
+      matchReason: 'skill' as const
+    }))
+    .sort((a, b) => a.title.localeCompare(b.title));
+}
+
 export function countLabel(n: number): string {
   if (n === 0) return 'None';
   if (n === 1) return '1 resource';

@@ -5,13 +5,15 @@ import { cn } from '../lib/utils';
 import { Logo } from './Logo';
 import { SkillAgent } from './SkillAgent';
 import { ACTIVE_PATH_EVENT, readActivePathFromStorage } from '../lib/activePath';
+import { isAdminRole } from '../lib/inputValidation';
+import type { AppPage } from '../lib/navigation';
 
 interface LayoutProps {
   children: React.ReactNode;
   user: User;
   userRole: string | null;
-  onNavigate: (page: any) => void;
-  currentPage: string;
+  onNavigate: (page: AppPage) => void;
+  currentPage: AppPage;
 }
 
 export function Layout({ children, user, userRole, onNavigate, currentPage }: LayoutProps) {
@@ -67,8 +69,8 @@ export function Layout({ children, user, userRole, onNavigate, currentPage }: La
     { id: 'trends', label: 'Market Trends', icon: LineChart },
   ];
 
-  if (userRole === 'admin') {
-    menuItems.push({ id: 'admin', label: 'Admin Panel', icon: ShieldCheck });
+  if (isAdminRole(userRole)) {
+    menuItems.push({ id: 'admin' as const, label: 'Admin Panel', icon: ShieldCheck });
   }
 
   return (
@@ -194,9 +196,36 @@ export function Layout({ children, user, userRole, onNavigate, currentPage }: La
               <div className="space-y-4">
                 <h4 className="text-[10px] font-bold text-white uppercase tracking-[0.2em]">Connect</h4>
                 <div className="flex flex-col gap-2 text-xs text-zinc-500 font-medium">
-                  <a href="#" className="hover:text-white flex items-center gap-2"><Mail className="w-3.5 h-3.5" /> Support</a>
-                  <a href="#" className="hover:text-white">API Reference</a>
-                  <a href="#" className="hover:text-white">Community Forum</a>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onNavigate('support');
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
+                    className="hover:text-white flex items-center gap-2 text-left"
+                  >
+                    <Mail className="w-3.5 h-3.5" /> Support
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onNavigate('api-reference');
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
+                    className="hover:text-white text-left"
+                  >
+                    API Reference
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onNavigate('community');
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
+                    className="hover:text-white text-left"
+                  >
+                    Community
+                  </button>
                 </div>
               </div>
             </div>

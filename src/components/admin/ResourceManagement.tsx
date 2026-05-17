@@ -8,7 +8,14 @@ import { AdminInput } from './AdminInput';
 import { AdminSelect } from './AdminSelect';
 import type { ShowToastFn } from './useToast';
 import type { ResourceRow } from '../../types/database';
-import { isValidResourceTitle, validateCommaSeparatedSkills } from '../../lib/inputValidation';
+import {
+  isValidResourceTitle,
+  isValidResourceDescription,
+  isValidHttpUrl,
+  isValidResourceType,
+  isValidResourceDifficulty,
+  validateCommaSeparatedSkills
+} from '../../lib/inputValidation';
 
 interface Resource extends ResourceRow {}
 
@@ -120,13 +127,18 @@ export function ResourceManagement({ showToast }: { showToast: ShowToastFn }) {
       newErrors.title = 'Title: 3–120 characters; start with a letter, number, or . + #';
     }
     if (!formData.description.trim()) newErrors.description = 'Description is required';
+    else if (!isValidResourceDescription(formData.description.trim())) {
+      newErrors.description = 'Description must be 10–2000 characters with no control characters.';
+    }
     if (!formData.url.trim()) newErrors.url = 'URL is required';
-    else {
-      try {
-        new URL(formData.url);
-      } catch {
-        newErrors.url = 'Please enter a valid URL';
-      }
+    else if (!isValidHttpUrl(formData.url)) {
+      newErrors.url = 'Enter a valid http:// or https:// URL (max 2048 characters).';
+    }
+    if (!isValidResourceType(formData.type)) {
+      newErrors.type = 'Choose a valid resource type.';
+    }
+    if (!isValidResourceDifficulty(formData.difficulty)) {
+      newErrors.difficulty = 'Choose Beginner, Intermediate, or Advanced.';
     }
     const skillsCheck = validateCommaSeparatedSkills(formData.skillsCoveredInput);
     if (!skillsCheck.ok) newErrors.skillsCoveredInput = skillsCheck.error;

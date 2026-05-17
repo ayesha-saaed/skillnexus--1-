@@ -104,7 +104,10 @@ const requireAdmin: express.RequestHandler = async (req, res, next) => {
     .maybeSingle();
 
   if (error) return apiError(res, 500, "SERVER_ERROR", "Failed to check admin role", error.message);
-  if (!data || data.role !== "admin") return apiError(res, 403, "FORBIDDEN", "Admin access required");
+  const role = String(data?.role ?? "")
+    .trim()
+    .toLowerCase();
+  if (role !== "admin") return apiError(res, 403, "FORBIDDEN", "Admin access required");
 
   authReq.isAdmin = true;
   next();

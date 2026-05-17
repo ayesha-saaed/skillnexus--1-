@@ -14,7 +14,7 @@ interface Stats {
   /** Curated taxonomy rows in `public.skills` (admin / domains). */
   catalogSkills: number;
   /** Per-user tags from the main app "My Skills" page (`public.user_skills`). */
-  learnerSkillEntries: number;
+  userSkillEntries: number;
   totalResources: number;
   activeUsers: number;
 }
@@ -30,7 +30,7 @@ export function AdminAnalytics({ showToast, onOpenTab }: AdminAnalyticsProps) {
     totalAdmins: 0,
     totalDomains: 0,
     catalogSkills: 0,
-    learnerSkillEntries: 0,
+    userSkillEntries: 0,
     totalResources: 0,
     activeUsers: 0
   });
@@ -119,7 +119,7 @@ export function AdminAnalytics({ showToast, onOpenTab }: AdminAnalyticsProps) {
         totalAdmins: adminCountRes.count || 0,
         totalDomains: domainsData.count || 0,
         catalogSkills: skillsData.count || 0,
-        learnerSkillEntries: userSkillsData.error ? 0 : userSkillsData.count ?? 0,
+        userSkillEntries: userSkillsData.error ? 0 : userSkillsData.count ?? 0,
         totalResources: resourcesData.count || 0,
         activeUsers: activeCountRes.count || 0
       });
@@ -191,16 +191,15 @@ export function AdminAnalytics({ showToast, onOpenTab }: AdminAnalyticsProps) {
       hint: 'Edit domains'
     },
     {
-      label: 'Learner skills (My Skills)',
-      value: stats.learnerSkillEntries,
+      label: 'User Skills',
+      value: stats.userSkillEntries,
       icon: UserCircle,
       color: 'amber',
       bgColor: 'bg-amber-600/20',
       textColor: 'text-amber-200',
       iconColor: 'text-amber-400',
-      targetTab: 'users',
-      openUserDetails: true,
-      hint: 'Inspect per-user skills in User details'
+      targetTab: 'skills',
+      hint: 'View user skill entries on Skills tab'
     },
     {
       label: 'Curated skills (catalog)',
@@ -324,12 +323,12 @@ export function AdminAnalytics({ showToast, onOpenTab }: AdminAnalyticsProps) {
             </div>
             <div className="bg-white/5 rounded-lg p-4">
               <div className="flex items-center justify-between mb-2">
-                <p className="text-sm text-zinc-300">Learner + catalog</p>
+                <p className="text-sm text-zinc-300">User + catalog skills</p>
                 <p className="text-lg font-black text-purple-400">
-                  {stats.learnerSkillEntries} / {stats.catalogSkills}
+                  {stats.userSkillEntries} / {stats.catalogSkills}
                 </p>
               </div>
-              <p className="text-xs text-zinc-500">User tags (My Skills) / curated catalog rows</p>
+              <p className="text-xs text-zinc-500">User skills (My Skills) / curated catalog rows</p>
             </div>
             <div className="bg-white/5 rounded-lg p-4">
               <div className="flex items-center justify-between mb-2">
@@ -372,12 +371,12 @@ export function AdminAnalytics({ showToast, onOpenTab }: AdminAnalyticsProps) {
               {
                 tab: 'users' as const,
                 title: 'User overview',
-                desc: 'Directory, search, user details, learner skills',
+                desc: 'Directory, search, and user profiles',
                 openUserDetails: true
               },
               { tab: 'roles' as const, title: 'Job roles', desc: 'Titles, domains, required skills' },
               { tab: 'domains' as const, title: 'Domains', desc: 'Learning paths & categories' },
-              { tab: 'skills' as const, title: 'Catalog skills', desc: 'Taxonomy linked to domains' },
+              { tab: 'skills' as const, title: 'User skills', desc: 'My Skills entries and catalog taxonomy' },
               { tab: 'resources' as const, title: 'Resources', desc: 'Library items & metadata' }
             ] as const
           ).map((link) => (

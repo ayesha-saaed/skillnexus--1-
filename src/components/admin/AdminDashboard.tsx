@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getCurrentUser, supabase } from '../../lib/supabase';
+import { isAdminRole } from '../../lib/inputValidation';
 import { ShieldAlert, BarChart3, Database, Users, Briefcase, PackageOpen, LogOut, ArrowLeft } from 'lucide-react';
 import { motion } from 'motion/react';
 import { AdminAnalytics } from './AdminAnalytics';
@@ -45,7 +46,7 @@ export function AdminDashboard({ onNavigate }: AdminDashboardProps) {
 
       const { data } = await supabase.from('profiles').select('role').eq('id', user.id).single();
 
-      if (data?.role === 'admin') {
+      if (isAdminRole(data?.role)) {
         setIsAdmin(true);
       } else {
         showToast('Access denied: Admin privileges required', 'error');

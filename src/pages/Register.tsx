@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { supabase } from '../lib/firebase';
 import { motion } from 'motion/react';
 import { Mail, Lock, User, AlertCircle, Chrome } from 'lucide-react';
-import { isValidDisplayName, isValidEmail, PASSWORD_REGEX } from '../lib/inputValidation';
+import { isValidDisplayName, isValidEmail, isValidPassword } from '../lib/inputValidation';
 
 interface RegisterProps {
   onNavigate: (page: any) => void;
@@ -33,7 +33,7 @@ export function Register({ onNavigate }: RegisterProps) {
 
   const validatePassword = (value: string) => {
     if (!value) return 'Password is required';
-    if (!PASSWORD_REGEX.test(value)) return 'Password must be 8+ chars with uppercase, lowercase, number, and special char (@$!%*?&)';
+    if (!isValidPassword(value)) return 'Password must be 8+ chars with uppercase, lowercase, number, and special char (@$!%*?&)';
     return '';
   };
 
