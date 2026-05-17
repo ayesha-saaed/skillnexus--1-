@@ -4,6 +4,13 @@ import { JOB_ROLES } from './knowledge_base';
 import { readActivePathFromStorage } from './activePath';
 import { resourcesForJobRole, type ResourceLike, type LinkedResource } from './resourceLinking';
 import type { Resource } from '../types/database';
+import {
+  isLowQualityLearningResource,
+  isLegacyPracticePlatformRow,
+  practicePlatformsForSkills,
+  PRACTICE_PLATFORM_TYPE,
+  PRACTICE_PLATFORMS_SECTION
+} from './practicePlatforms';
 
 export type LibraryResource = Resource;
 
@@ -64,7 +71,24 @@ export async function fetchLibraryResources(): Promise<LibraryResource[]> {
     /* use static fallback */
   }
 
-  return Array.from(byUrl.values());
+  return Array.from(byUrl.values()).filter(
+    (r) => !isLowQualityLearningResource(r) && !isLegacyPracticePlatformRow(r)
+  );
+}
+
+export function enrichResourcesForCareerPath(
+  pathResources: LibraryResource[],
+  requiredSkills: string[]
+): {
+  learningResources: LibraryResource[];
+  practicePlatforms: LibraryResource[];
+} {
+  const practicePlatforms = practicePlatformsForSkills(requiredSkills);
+  const practiceIds = new Set(practicePlatforms.map((p) => p.id));
+  const learningResources = pathResources.filter(
+    (r) => r.type !== PRACTICE_PLATFORM_TYPE && !practiceIds.has(r.id)
+  );
+  return { learningResources, practicePlatforms };
 }
 
 export async function resolveCareerPathContext(userId?: string): Promise<CareerPathContext | null> {
@@ -164,6 +188,7 @@ export function filterLibraryResources(
   filters: { type: string; domain: string; difficulty: string }
 ): LibraryResource[] {
   return resources.filter((r) => {
+    if (isLowQualityLearningResource(r)) return false;
     if (filters.type !== 'All' && r.type !== filters.type) return false;
     if (filters.domain !== 'All' && r.domain !== filters.domain) return false;
     if (filters.difficulty !== 'All' && r.difficulty !== filters.difficulty) return false;
@@ -183,10 +208,16 @@ export function groupResourcesByDomain(resources: LibraryResource[]): { domain: 
     .sort((a, b) => a.domain.localeCompare(b.domain));
 }
 
+export function displayTypeLabel(type: string): string {
+  if (type === PRACTICE_PLATFORM_TYPE) return PRACTICE_PLATFORMS_SECTION;
+  return type;
+}
+
 export function groupResourcesByType(resources: LibraryResource[]): { type: string; items: LibraryResource[] }[] {
-  const order = ['Documentation', 'Course', 'Video', 'Article', 'Practice Platform'];
+  const order = ['Course', 'Video', 'Article', 'Practice Platform'];
   const map = new Map<string, LibraryResource[]>();
   for (const r of resources) {
+    if (isLowQualityLearningResource(r)) continue;
     const key = r.type || 'Other';
     if (!map.has(key)) map.set(key, []);
     map.get(key)!.push(r);
@@ -200,9 +231,9 @@ export function groupResourcesByType(resources: LibraryResource[]): { type: stri
     return ia - ib;
   });
   return keys.map((type) => ({
-    type,
+    type: displayTypeLabel(type),
     items: (map.get(type) || []).sort((a, b) => a.title.localeCompare(b.title))
   }));
 }
 
-export const RESOURCE_TYPES = ['All', 'Documentation', 'Course', 'Video', 'Article', 'Practice Platform'] as const;
+export const RESOURCE_TYPES = ['All', 'Course', 'Video', 'Article', 'Practice Platform'] as const;

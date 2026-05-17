@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { Plus, Edit2, Trash2, Search } from 'lucide-react';
 import { supabase, getAccessToken } from '../../lib/supabase';
 import { normalizeText, isDuplicateDbError } from '../../lib/utils';
@@ -198,14 +199,20 @@ export function DomainManagement({ showToast }: { showToast: ShowToastFn }) {
     setIsModalOpen(true);
   }
 
+  const debouncedDomainName = useDebouncedValue(formData.name, 400);
+
   const previewDomainResources = useMemo(
-    () => resourcesForDomain(allResources, formData.name),
-    [allResources, formData.name]
+    () => resourcesForDomain(allResources, debouncedDomainName),
+    [allResources, debouncedDomainName]
   );
 
-  function linkedCountForDomain(domainName: string): number {
-    return resourcesForDomain(allResources, domainName).length;
-  }
+  const resourceCountByDomainName = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const domain of domains) {
+      counts.set(domain.name, resourcesForDomain(allResources, domain.name).length);
+    }
+    return counts;
+  }, [domains, allResources]);
 
   const filteredDomains = domains.filter((d) =>
     d.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -263,7 +270,9 @@ export function DomainManagement({ showToast }: { showToast: ShowToastFn }) {
             header: 'Learning resources',
             key: 'id',
             render: (_id, item) => (
-              <span className="text-xs font-medium text-cyan-400/90">{countLabel(linkedCountForDomain(item.name))}</span>
+              <span className="text-xs font-medium text-cyan-400/90">
+                {countLabel(resourceCountByDomainName.get(item.name) ?? 0)}
+              </span>
             )
           },
           {

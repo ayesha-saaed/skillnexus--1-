@@ -18,12 +18,15 @@ import {
   resolveCareerPathContext,
   splitResourcesByCareerPath,
   filterLibraryResources,
+  enrichResourcesForCareerPath,
   groupResourcesByDomain,
   groupResourcesByType,
   RESOURCE_TYPES,
   type LibraryResource,
   type CareerPathContext
 } from '../lib/libraryResources';
+import { practicePlatformsForSkills } from '../lib/practicePlatforms';
+import { PracticePlatformsSection } from '../components/library/PracticePlatformsSection';
 import type { LinkedResource } from '../lib/resourceLinking';
 import { ResourceLibraryCard, type DomainStyle } from '../components/library/ResourceLibraryCard';
 import {
@@ -142,18 +145,34 @@ export function Library({ onNavigate }: LibraryProps) {
     [resources, careerPath]
   );
 
-  const filteredBrowse = useMemo(
-    () =>
-      filterLibraryResources(otherResources, {
-        type: filterType,
-        domain: filterDomain,
-        difficulty: filterDifficulty
-      }),
-    [otherResources, filterType, filterDomain, filterDifficulty]
-  );
+  const filteredBrowse = useMemo(() => {
+    if (filterType === 'Practice Platform') {
+      const skills = careerPath?.requiredSkills || [];
+      return practicePlatformsForSkills(skills, { limit: 9 });
+    }
+    return filterLibraryResources(otherResources, {
+      type: filterType,
+      domain: filterDomain,
+      difficulty: filterDifficulty
+    });
+  }, [otherResources, filterType, filterDomain, filterDifficulty, careerPath?.requiredSkills]);
 
-  const browseByDomain = useMemo(() => groupResourcesByDomain(filteredBrowse), [filteredBrowse]);
-  const pathByType = useMemo(() => groupResourcesByType(pathResources), [pathResources]);
+  const browseByDomain = useMemo(() => {
+    if (filterType === 'Practice Platform') return [];
+    return groupResourcesByDomain(filteredBrowse);
+  }, [filteredBrowse, filterType]);
+
+  const pathEnriched = useMemo(() => {
+    if (!careerPath) {
+      return { learningResources: pathResources, practicePlatforms: [] as LibraryResource[] };
+    }
+    return enrichResourcesForCareerPath(pathResources, careerPath.requiredSkills);
+  }, [pathResources, careerPath]);
+
+  const pathByType = useMemo(
+    () => groupResourcesByType(pathEnriched.learningResources),
+    [pathEnriched.learningResources]
+  );
 
   const domainNames = useMemo(() => {
     const names = new Set(resources.map((r) => r.domain).filter(Boolean));
@@ -250,7 +269,7 @@ export function Library({ onNavigate }: LibraryProps) {
 
           {loading ? (
             <p className="text-sm text-zinc-500">Loading path resources…</p>
-          ) : pathResources.length === 0 ? (
+          ) : pathResources.length === 0 && pathEnriched.practicePlatforms.length === 0 ? (
             <p className="text-sm text-zinc-500 leading-relaxed">
               No resources are linked to this path yet. Add resources in Admin with matching domain (
               <span className="text-zinc-300">{careerPath.domain}</span>) or overlapping skills, or run the skill
@@ -258,6 +277,13 @@ export function Library({ onNavigate }: LibraryProps) {
             </p>
           ) : (
             <div className="space-y-8">
+              <PracticePlatformsSection
+                platforms={pathEnriched.practicePlatforms}
+                progress={progress}
+                matchBadge="Role skills"
+                onUpdateProgress={handleUpdateProgress}
+                domainStyle={domainStyle(careerPath.domain)}
+              />
               {pathByType.map((group) => (
                 <div key={group.type} className="space-y-4">
                   <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.25em]">{group.type}</h3>
@@ -357,6 +383,13 @@ export function Library({ onNavigate }: LibraryProps) {
 
         {loading ? (
           <p className="text-sm text-zinc-500 py-12 text-center">Loading resources…</p>
+        ) : filterType === 'Practice Platform' ? (
+          <PracticePlatformsSection
+            platforms={filteredBrowse}
+            progress={progress}
+            matchBadge={careerPath ? 'Role skills' : 'All platforms'}
+            onUpdateProgress={handleUpdateProgress}
+          />
         ) : filteredBrowse.length === 0 ? (
           <div className="theme-card min-h-[240px] flex flex-col items-center justify-center text-center p-8 border-dashed border-white/10">
             <Book className="w-10 h-10 text-zinc-700 mb-4" />

@@ -242,7 +242,7 @@ export function Admin({ onNavigate }: AdminProps) {
                         onChange={e => setNewRes({...newRes, type: e.target.value})}
                       >
                         <option>Course</option>
-                        <option>Documentation</option>
+                        <option>Practice Platform</option>
                         <option>Article</option>
                         <option>Video</option>
                       </select>

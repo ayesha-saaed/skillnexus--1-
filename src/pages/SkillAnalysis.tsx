@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase, getAccessToken } from '../lib/supabase';
 import { getCurrentUser } from '../lib/firebase';
-import { Target, CheckCircle, AlertCircle, ArrowRight, BookOpen, Search, X, BarChart3, Download } from 'lucide-react';
+import { Target, CheckCircle, AlertCircle, ArrowRight, BookOpen, Search, X, BarChart3, Download, ExternalLink } from 'lucide-react';
+import { practicePlatformsForSkills, isLowQualityLearningResource } from '../lib/practicePlatforms';
 import { JOB_ROLES, LEARNING_RESOURCES } from '../lib/knowledge_base';
 import { resources } from '../lib/resources';
 import { persistActivePath, type ActivePathPayload } from '../lib/activePath';
@@ -31,7 +32,8 @@ interface GapResult {
   weakSkills: string[];
   nextSteps: string[];
   matchPercent: number;
-  recommendedResources: Array<{title: string; skillsCovered: string[]; url: string}>;
+  recommendedResources: Array<{ title: string; skillsCovered: string[]; url: string; type?: string }>;
+  practicePlatforms: Array<{ title: string; platform: string; skillsCovered: string[]; url: string }>;
   chartData?: Array<{skill: string; yourScore: number; required: number; status: 'matched' | 'weak' | 'missing'; importance: number}>;
 }
 
@@ -205,9 +207,29 @@ export function SkillAnalysis({ user, onNavigate }: SkillAnalysisProps): React.J
         nextSteps.push('5. Track progress in your skill dashboard.');
       }
 
+      const roleSkillNames = requiredSkills.map((s) => s.name);
+      const focusSkills = [
+        ...new Set([
+          ...missingSkills,
+          ...weakSkills.map((w) => w.name),
+          ...matchedSkills,
+          ...roleSkillNames
+        ])
+      ];
+
+      const practicePlatforms = practicePlatformsForSkills(focusSkills, { limit: 6 }).map((p) => ({
+        title: p.title,
+        platform: p.platform,
+        skillsCovered: p.skillsCovered,
+        url: p.url
+      }));
+
       const gapSkills = [...matchedSkills, ...missingSkills, ...weakSkills.map((w) => w.name)];
-      const recommendedResources: Array<{ title: string; skillsCovered: string[]; url: string }> = [];
+      const recommendedResources: Array<{ title: string; skillsCovered: string[]; url: string; type?: string }> = [];
       (resources as any[]).concat(LEARNING_RESOURCES).forEach((r: any) => {
+        if (isLowQualityLearningResource(r)) return;
+        if ((r.type || '').toLowerCase() === 'documentation') return;
+        if ((r.type || '').toLowerCase() === 'practice platform') return;
         if (
           gapSkills.some((gapName) =>
             (r.skillsCovered || []).some((sc: string) => skillsAreEqual(sc, gapName))
@@ -216,7 +238,8 @@ export function SkillAnalysis({ user, onNavigate }: SkillAnalysisProps): React.J
           recommendedResources.push({
             title: r.title,
             skillsCovered: r.skillsCovered,
-            url: r.url || '#'
+            url: r.url || '#',
+            type: r.type
           });
         }
       });
@@ -229,6 +252,7 @@ export function SkillAnalysis({ user, onNavigate }: SkillAnalysisProps): React.J
         nextSteps,
         matchPercent: computedMatchPercent,
         recommendedResources: recommendedResources.slice(0, 4),
+        practicePlatforms,
         chartData
       };
 
@@ -434,12 +458,42 @@ export function SkillAnalysis({ user, onNavigate }: SkillAnalysisProps): React.J
             </p>
           </div>
 
-        {/* Recommended Resources */}
+        {result.practicePlatforms?.length > 0 && (
+          <div className="bg-zinc-900 border border-violet-500/25 rounded-2xl p-6">
+            <h3 className="flex items-center gap-2 text-violet-300 font-semibold text-sm mb-4">
+              <Target className="w-4 h-4" />
+              Practice Platforms ({result.practicePlatforms.length})
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {result.practicePlatforms.map((platform) => (
+                <a
+                  key={platform.url}
+                  href={platform.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-start gap-3 p-4 bg-violet-500/5 hover:bg-violet-500/10 border border-violet-500/20 rounded-xl transition-all"
+                >
+                  <Target className="w-5 h-5 text-violet-400 shrink-0 mt-0.5" />
+                  <div className="min-w-0 flex-1">
+                    <h4 className="font-semibold text-white">{platform.title}</h4>
+                    <p className="text-[10px] text-violet-300/80 uppercase tracking-widest mt-0.5">{platform.platform}</p>
+                    <p className="text-xs text-zinc-500 mt-1 truncate">
+                      Skills: {platform.skillsCovered.slice(0, 4).join(', ')}
+                      {platform.skillsCovered.length > 4 ? '…' : ''}
+                    </p>
+                  </div>
+                  <ExternalLink className="w-4 h-4 text-zinc-500 shrink-0" />
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
+
         {result.recommendedResources.length > 0 && (
           <div className="bg-zinc-900 border border-emerald-500/20 rounded-2xl p-6">
             <h3 className="flex items-center gap-2 text-emerald-400 font-semibold text-sm mb-4">
               <BookOpen className="w-4 h-4" />
-              Recommended Learning Resources ({result.recommendedResources.length})
+              Courses & learning resources ({result.recommendedResources.length})
             </h3>
             <div className="space-y-3">
               {result.recommendedResources.map((res, i) => (

@@ -58,8 +58,7 @@ export function ResourceManagement({ showToast }: { showToast: ShowToastFn }) {
     { value: 'Course', label: '📚 Course' },
     { value: 'Video', label: '🎥 Video' },
     { value: 'Article', label: '📄 Article' },
-    { value: 'Book', label: '📖 Book' },
-    { value: 'Documentation', label: '📚 Documentation' }
+    { value: 'Practice Platform', label: '🎯 Practice Platform' }
   ];
 
   const difficultyLevels = [

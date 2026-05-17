@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { Plus, Edit2, Trash2, Search } from 'lucide-react';
 import { supabase, getAccessToken } from '../../lib/supabase';
 import { normalizeText, isDuplicateDbError } from '../../lib/utils';
@@ -217,20 +218,32 @@ export function RoleManagement({ showToast }: { showToast: ShowToastFn }) {
     }
   }
 
+  const debouncedForm = useDebouncedValue(formData, 400);
+
   const previewLinkedResources = useMemo(() => {
-    const skills = formData.requiredSkills
+    const skills = debouncedForm.requiredSkills
       .split(',')
       .map((s) => s.trim())
       .filter(Boolean);
     return resourcesForJobRole(allResources, {
-      domain: formData.domain,
+      domain: debouncedForm.domain,
       required_skills: skills
     });
-  }, [allResources, formData.domain, formData.requiredSkills]);
+  }, [allResources, debouncedForm.domain, debouncedForm.requiredSkills]);
 
-  function linkedCountForRole(role: JobRole): number {
-    return resourcesForJobRole(allResources, role).length;
-  }
+  const resourceCountByRoleId = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const role of roles) {
+      counts.set(
+        role.id,
+        resourcesForJobRole(allResources, {
+          domain: role.domain,
+          required_skills: role.required_skills || []
+        }).length
+      );
+    }
+    return counts;
+  }, [roles, allResources]);
 
   const filteredRoles = roles.filter((role) =>
     role.role_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -284,7 +297,9 @@ export function RoleManagement({ showToast }: { showToast: ShowToastFn }) {
             header: 'Learning resources',
             key: 'id',
             render: (_id, role) => (
-              <span className="text-xs font-medium text-cyan-400/90">{countLabel(linkedCountForRole(role))}</span>
+              <span className="text-xs font-medium text-cyan-400/90">
+                {countLabel(resourceCountByRoleId.get(role.id) ?? 0)}
+              </span>
             )
           },
           {

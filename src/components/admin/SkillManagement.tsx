@@ -1,15 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Plus, Edit2, Trash2, Search } from 'lucide-react';
 import { supabase, getAccessToken } from '../../lib/supabase';
-import { normalizeText, isDuplicateDbError } from '../../lib/utils';
 import { AdminTable } from './AdminTable';
 import { AdminModal } from './AdminModal';
-import { AdminInput } from './AdminInput';
-import { AdminSelect } from './AdminSelect';
 import type { ShowToastFn } from './useToast';
-import { skillTokenError, resourceDescriptionError } from '../../lib/inputValidation';
 import { resourcesForSkill, countLabel, type ResourceLike } from '../../lib/resourceLinking';
-import { LearningResourcesPanel } from './LearningResourcesPanel';
+import { SkillCatalogFormModal, type SkillFormValues } from './SkillCatalogFormModal';
 
 interface Skill {
   id: string;
@@ -34,6 +30,8 @@ interface UserSkillRow {
   profiles?: { name: string | null; email: string | null } | null;
 }
 
+const emptyForm: SkillFormValues = { name: '', description: '', domain_id: '' };
+
 export function SkillManagement({ showToast }: { showToast: ShowToastFn }) {
   const [skills, setSkills] = useState<Skill[]>([]);
   const [userSkills, setUserSkills] = useState<UserSkillRow[]>([]);
@@ -43,16 +41,11 @@ export function SkillManagement({ showToast }: { showToast: ShowToastFn }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [modalInitial, setModalInitial] = useState<SkillFormValues>(emptyForm);
   const [searchTerm, setSearchTerm] = useState('');
-
-  const [formData, setFormData] = useState({
-    name: '',
-    description: '',
-    domain_id: ''
-  });
-  const [errors, setErrors] = useState<Record<string, string>>({});
   const [allResources, setAllResources] = useState<ResourceLike[]>([]);
   const [resourcesLoading, setResourcesLoading] = useState(true);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     void Promise.all([fetchSkills(), fetchDomains(), fetchUserSkills(), fetchResources()]);
@@ -122,6 +115,8 @@ export function SkillManagement({ showToast }: { showToast: ShowToastFn }) {
       setSkills(data || []);
     } catch (err: any) {
       showToast(err.message || 'Failed to fetch skills', 'error');
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -132,105 +127,18 @@ export function SkillManagement({ showToast }: { showToast: ShowToastFn }) {
       setDomains(data || []);
     } catch (err: any) {
       showToast(err.message || 'Failed to fetch domains', 'error');
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  function validateForm(): string | null {
-    const newErrors: Record<string, string> = {};
-    const nameErr = skillTokenError(formData.name);
-    if (nameErr) newErrors.name = nameErr;
-    const descErr = resourceDescriptionError(formData.description);
-    if (descErr) newErrors.description = descErr;
-    // domain_id is optional: lets you add catalog skills before any domains exist in the DB
-    setErrors(newErrors);
-    if (Object.keys(newErrors).length) return Object.values(newErrors)[0];
-    return null;
-  }
-
-  function skillPayload() {
-    const name = formData.name.trim();
-    const description = formData.description.trim();
-    const domain_id = formData.domain_id.trim() || null;
-    return { name, description, domain_id };
-  }
-
-  async function handleSave() {
-    const v = validateForm();
-    if (v) {
-      showToast(v, 'error');
-      return;
-    }
-
-    const normalizedSkillName = normalizeText(formData.name);
-    const duplicateSkill = skills.some(
-      (skill) => normalizeText(skill.name) === normalizedSkillName && skill.id !== editingId
-    );
-    if (duplicateSkill) {
-      showToast('Already exists', 'error');
-      return;
-    }
-
-    try {
-      setLoading(true);
-      const token = await getAccessToken();
-      if (!token) throw new Error('Unable to authenticate admin session. Please sign in again.');
-
-      const payload = {
-        id: editingId || undefined,
-        name: formData.name.trim(),
-        description: formData.description.trim(),
-        domain_id: formData.domain_id.trim() || undefined
-      };
-
-      const response = await fetch('/api/admin/skills', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify(payload)
-      });
-
-      const responseData = await response.json();
-      if (!response.ok) {
-        throw new Error(responseData?.error?.message || 'Failed to save skill');
-      }
-
-      showToast(editingId ? 'Skill updated successfully' : 'Skill created successfully', 'success');
-      setIsModalOpen(false);
-      resetForm();
-      void fetchSkills();
-    } catch (err: any) {
-      if (isDuplicateDbError(err)) {
-        showToast('Already exists', 'error');
-      } else {
-        const msg = err?.message || err?.error?.message || 'Failed to save skill';
-        showToast(
-          /row-level security|RLS|policy|not-null|null value in column "domain_id"/i.test(String(msg))
-            ? `${msg} (If domain is required in your DB, run: ALTER TABLE public.skills ALTER COLUMN domain_id DROP NOT NULL; or add a domain first.)`
-            : msg,
-          'error'
-        );
-      }
-      console.error('Skill save error:', err);
-    } finally {
-      setLoading(false);
     }
   }
 
   async function handleDelete(id: string) {
     try {
-      setLoading(true);
+      setDeleting(true);
       const token = await getAccessToken();
       if (!token) throw new Error('Unable to authenticate admin session. Please sign in again.');
 
       const response = await fetch(`/api/admin/skills/${id}`, {
         method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
+        headers: { Authorization: `Bearer ${token}` }
       });
       const responseData = await response.json();
       if (!response.ok) {
@@ -238,22 +146,23 @@ export function SkillManagement({ showToast }: { showToast: ShowToastFn }) {
       }
       showToast('Skill deleted successfully', 'success');
       setIsDeleteConfirmOpen(false);
-      fetchSkills();
+      setEditingId(null);
+      void fetchSkills();
     } catch (err: any) {
       showToast(err.message || 'Failed to delete skill', 'error');
     } finally {
-      setLoading(false);
+      setDeleting(false);
     }
   }
 
-  function resetForm() {
-    setFormData({ name: '', description: '', domain_id: '' });
-    setErrors({});
+  function openCreateModal() {
+    setModalInitial(emptyForm);
     setEditingId(null);
+    setIsModalOpen(true);
   }
 
   function openEditModal(skill: Skill) {
-    setFormData({
+    setModalInitial({
       name: skill.name,
       description: skill.description,
       domain_id: skill.domain_id || ''
@@ -262,19 +171,23 @@ export function SkillManagement({ showToast }: { showToast: ShowToastFn }) {
     setIsModalOpen(true);
   }
 
-  const filteredSkills = skills.filter((s) =>
-    s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    s.description.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredSkills = useMemo(
+    () =>
+      skills.filter(
+        (s) =>
+          s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          s.description.toLowerCase().includes(searchTerm.toLowerCase())
+      ),
+    [skills, searchTerm]
   );
 
-  const previewLinkedResources = useMemo(() => {
-    if (!formData.name.trim()) return [];
-    return resourcesForSkill(allResources, formData.name.trim());
-  }, [allResources, formData.name]);
-
-  function linkedCountForSkill(skill: Skill): number {
-    return resourcesForSkill(allResources, skill.name).length;
-  }
+  const resourceCountBySkillId = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const skill of skills) {
+      counts.set(skill.id, resourcesForSkill(allResources, skill.name).length);
+    }
+    return counts;
+  }, [skills, allResources]);
 
   return (
     <div className="space-y-6">
@@ -325,10 +238,7 @@ export function SkillManagement({ showToast }: { showToast: ShowToastFn }) {
         </div>
 
         <button
-          onClick={() => {
-            resetForm();
-            setIsModalOpen(true);
-          }}
+          onClick={openCreateModal}
           className="flex items-center gap-2 px-4 py-2 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/20 rounded-lg text-sm font-medium text-blue-300 transition-colors"
         >
           <Plus className="w-4 h-4" />
@@ -354,7 +264,9 @@ export function SkillManagement({ showToast }: { showToast: ShowToastFn }) {
             header: 'Learning resources',
             key: 'id',
             render: (_id, skill) => (
-              <span className="text-xs font-medium text-cyan-400/90">{countLabel(linkedCountForSkill(skill))}</span>
+              <span className="text-xs font-medium text-cyan-400/90">
+                {countLabel(resourceCountBySkillId.get(skill.id) ?? 0)}
+              </span>
             )
           },
           {
@@ -388,59 +300,24 @@ export function SkillManagement({ showToast }: { showToast: ShowToastFn }) {
         emptyMessage="No skills found"
       />
 
-      <AdminModal
-        isOpen={isModalOpen}
-        wide
-        title={editingId ? 'Edit Skill' : 'Add New Skill'}
-        onClose={() => {
-          setIsModalOpen(false);
-          resetForm();
-        }}
-        onSubmit={handleSave}
-        loading={loading}
-      >
-        <AdminInput
-          label="Skill Name"
-          value={formData.name}
-          onChange={(value) => setFormData({ ...formData, name: value })}
-          placeholder="e.g., React.js, TypeScript"
-          error={errors.name}
-          required
-          validator={skillTokenError}
-          onValidated={(err) => setErrors((prev) => ({ ...prev, name: err ?? '' }))}
+      {isModalOpen && (
+        <SkillCatalogFormModal
+          key={editingId ?? 'new'}
+          isOpen
+          editingId={editingId}
+          initialValues={modalInitial}
+          domains={domains}
+          allResources={allResources}
+          resourcesLoading={resourcesLoading}
+          catalogSkills={skills}
+          onClose={() => {
+            setIsModalOpen(false);
+            setEditingId(null);
+          }}
+          onSaved={() => void fetchSkills()}
+          showToast={showToast}
         />
-        {domains.length === 0 && (
-          <p className="text-xs text-amber-200/90 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
-            No domains loaded yet. Leave Domain as Unassigned, or set up the Domains tab + database first and refresh.
-          </p>
-        )}
-        <AdminSelect
-          label="Domain (optional)"
-          value={formData.domain_id}
-          onChange={(value) => setFormData({ ...formData, domain_id: value })}
-          options={domains.map((d) => ({ value: d.id, label: d.name }))}
-          placeholder="Unassigned (optional — add domains later)"
-          error={errors.domain_id}
-        />
-        <AdminInput
-          label="Description"
-          type="textarea"
-          value={formData.description}
-          onChange={(value) => setFormData({ ...formData, description: value })}
-          placeholder="What will students learn?"
-          error={errors.description}
-          required
-          validator={resourceDescriptionError}
-          onValidated={(err) => setErrors((prev) => ({ ...prev, description: err ?? '' }))}
-        />
-        <LearningResourcesPanel
-          title="Linked learning resources"
-          resources={previewLinkedResources}
-          loading={resourcesLoading}
-          listMaxHeightClass="max-h-56"
-          emptyHint="Add resources in Admin → Resources with this skill in Skills covered, or run sql/seed_learning_resources_by_skill.sql."
-        />
-      </AdminModal>
+      )}
 
       <AdminModal
         isOpen={isDeleteConfirmOpen}
@@ -449,7 +326,7 @@ export function SkillManagement({ showToast }: { showToast: ShowToastFn }) {
         onSubmit={() => editingId && handleDelete(editingId)}
         submitText="Delete"
         submitVariant="danger"
-        loading={loading}
+        loading={deleting}
       >
         <p className="text-zinc-300 text-sm">
           Are you sure you want to delete this skill? This action cannot be undone.

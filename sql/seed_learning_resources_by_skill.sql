@@ -1,27 +1,15 @@
 -- sql-dialect=postgres
--- Seed learning resources for every row in public.skills (5 types per skill).
--- Uses real external URLs (MDN, Coursera, YouTube, Google search, FreeCodeCamp).
+-- Seed learning resources for every row in public.skills (4 types per skill — no Documentation).
+-- Uses real external URLs (Coursera, YouTube, Google search, articles).
+-- Practice platforms: run sql/fix_learning_resources_practice_platforms.sql (9 curated sites).
 -- Run after sql/seed_domains_skills.sql. Safe to re-run.
 
--- Remove old placeholder links that 404 / Cloudflare tunnel errors
 DELETE FROM public.resources
 WHERE url LIKE 'https://skillnexus.dev/learn/%';
 
+DELETE FROM public.resources WHERE type = 'Documentation';
+
 INSERT INTO public.resources (title, description, url, type, skills_covered, difficulty, domain, platform)
-SELECT
-  s.name || ' — Official Documentation',
-  'Documentation and reference material for ' || s.name || ' (MDN / official docs search).',
-  'https://developer.mozilla.org/en-US/search?q=' || replace(trim(s.name), ' ', '+'),
-  'Documentation',
-  ARRAY[s.name],
-  'Beginner',
-  COALESCE(d.name, 'General'),
-  'MDN'
-FROM public.skills s
-LEFT JOIN public.domains d ON d.id = s.domain_id
-
-UNION ALL
-
 SELECT
   s.name || ' — Coursera Courses',
   'Browse Coursera courses related to ' || s.name || '.',
@@ -62,20 +50,6 @@ SELECT
 FROM public.skills s
 LEFT JOIN public.domains d ON d.id = s.domain_id
 
-UNION ALL
-
-SELECT
-  s.name || ' — Practice & Exercises',
-  'Hands-on practice and exercises for ' || s.name || '.',
-  'https://www.freecodecamp.org/news/search/?query=' || replace(trim(s.name), ' ', '%20'),
-  'Practice Platform',
-  ARRAY[s.name],
-  'Advanced',
-  COALESCE(d.name, 'General'),
-  'freeCodeCamp'
-FROM public.skills s
-LEFT JOIN public.domains d ON d.id = s.domain_id
-
 ON CONFLICT (url) DO UPDATE SET
   title = EXCLUDED.title,
   description = EXCLUDED.description,
@@ -86,8 +60,4 @@ ON CONFLICT (url) DO UPDATE SET
   platform = EXCLUDED.platform;
 
 SELECT COUNT(*) AS total_resources FROM public.resources;
-SELECT s.name AS skill, COUNT(r.id) AS resource_count
-FROM public.skills s
-LEFT JOIN public.resources r ON s.name = ANY (r.skills_covered)
-GROUP BY s.name
-ORDER BY s.name;
+SELECT type, COUNT(*) AS n FROM public.resources GROUP BY type ORDER BY type;
