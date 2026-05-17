@@ -2,9 +2,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import { supabase, getAccessToken } from '../lib/supabase';
 import { getCurrentUser } from '../lib/firebase';
 import { Target, CheckCircle, AlertCircle, ArrowRight, BookOpen, Search, X, BarChart3, Download } from 'lucide-react';
-import { JOB_ROLES, PROFICIENCY_SCORES, DEFAULT_REQUIRED_PROFICIENCY, LEARNING_RESOURCES } from '../lib/knowledge_base';
+import { JOB_ROLES, LEARNING_RESOURCES } from '../lib/knowledge_base';
 import { resources } from '../lib/resources';
 import { persistActivePath, type ActivePathPayload } from '../lib/activePath';
+import { computeGapAnalysis, skillsAreEqual } from '../lib/skillMatching';
 
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
@@ -103,11 +104,19 @@ export function SkillAnalysis({ user, onNavigate }: SkillAnalysisProps): React.J
         let authToken: string | null = null;
 
         if (currentUser) {
-          const { data: skillData } = await supabase
+          const { data: skillData, error: skillsErr } = await supabase
             .from('user_skills')
-            .select('skill_name, proficiency_level')
+            .select('skill_name, proficiency')
             .eq('user_id', currentUser.id);
-          setUserSkills((skillData || []).map((s: any) => ({ name: s.skill_name, proficiency: s.proficiency_level || 'Beginner' })));
+          if (skillsErr) {
+            console.warn('Failed to load user skills for gap analysis:', skillsErr.message);
+          }
+          setUserSkills(
+            (skillData || []).map((s: { skill_name: string; proficiency: string }) => ({
+              name: s.skill_name,
+              proficiency: s.proficiency || 'Beginner'
+            }))
+          );
           authToken = await getAccessToken();
         }
 
@@ -138,6 +147,20 @@ export function SkillAnalysis({ user, onNavigate }: SkillAnalysisProps): React.J
     loadData();
   }, []);
 
+  async function loadUserSkillsForAnalysis(userId: string) {
+    const { data: skillData, error: skillsErr } = await supabase
+      .from('user_skills')
+      .select('skill_name, proficiency')
+      .eq('user_id', userId);
+    if (skillsErr) throw skillsErr;
+    const loaded = (skillData || []).map((s: { skill_name: string; proficiency: string }) => ({
+      name: s.skill_name,
+      proficiency: s.proficiency || 'Beginner'
+    }));
+    setUserSkills(loaded);
+    return loaded;
+  }
+
   async function handleAnalyze() {
     if (!selectedDomainId) return;
 
@@ -147,112 +170,88 @@ export function SkillAnalysis({ user, onNavigate }: SkillAnalysisProps): React.J
     setLoading(true);
     setResult(null);
 
-    // Use requiredSkills from job role
-    const requiredSkills = domain.requiredSkills;
+    try {
+      const currentUser = await getCurrentUser();
+      let skillsForAnalysis = userSkills;
+      if (currentUser?.id) {
+        skillsForAnalysis = await loadUserSkillsForAnalysis(currentUser.id);
+      }
 
-    // Compute gaps with proficiency
-    const matchedSkills: string[] = [];
-    const missingSkills: RequiredSkill[] = [];
-    const weakSkills: {name: string; gap: number}[] = [];
-    let totalImportance = 0;
-    let weightedScore = 0;
+      const requiredSkills = domain.requiredSkills;
+      const gap = computeGapAnalysis(skillsForAnalysis, requiredSkills);
 
-    requiredSkills.forEach(req => {
-      totalImportance += req.importance;
-      const userSkill = userSkills.find(s => s.name.toLowerCase() === req.name.toLowerCase());
-      const userScore = PROFICIENCY_SCORES[userSkill?.proficiency || ''] || 0;
-      const scoreRatio = userScore / req.requiredProficiency;
+      const matchedSkills = gap.matchedSkills;
+      const missingSkills = gap.missingSkills;
+      const weakSkills = gap.weakSkills;
+      const computedMatchPercent = gap.matchPercent;
+      const chartData = gap.chartData;
 
-      if (userScore >= req.requiredProficiency) {
-        matchedSkills.push(req.name);
-        weightedScore += req.importance * 1;
-      } else if (userScore > 0) {
-        weakSkills.push({name: req.name, gap: req.requiredProficiency - userScore});
-        weightedScore += req.importance * scoreRatio;
+      setMatchPercent(computedMatchPercent);
+
+      const nextSteps: string[] = [];
+      if (missingSkills.length === 0 && weakSkills.length === 0) {
+        nextSteps.push('Perfect match! You meet all requirements for this role.');
+        nextSteps.push('Build projects and contribute to open source.');
+        nextSteps.push('Explore advanced topics and certifications.');
       } else {
-        missingSkills.push(req);
+        if (missingSkills.length > 0) {
+          nextSteps.push(`1. Learn priority gaps: ${missingSkills.slice(0, 3).join(', ')}`);
+        }
+        if (weakSkills.length > 0) {
+          nextSteps.push(`2. Improve proficiency in: ${weakSkills.slice(0, 2).map((w) => w.name).join(', ')}`);
+        }
+        nextSteps.push('3. Check recommended resources below.');
+        nextSteps.push('4. Apply learning through small projects.');
+        nextSteps.push('5. Track progress in your skill dashboard.');
       }
-    });
 
-    const computedMatchPercent = Math.round((weightedScore / totalImportance) * 100);
-    setMatchPercent(computedMatchPercent);
+      const gapSkills = [...matchedSkills, ...missingSkills, ...weakSkills.map((w) => w.name)];
+      const recommendedResources: Array<{ title: string; skillsCovered: string[]; url: string }> = [];
+      (resources as any[]).concat(LEARNING_RESOURCES).forEach((r: any) => {
+        if (
+          gapSkills.some((gapName) =>
+            (r.skillsCovered || []).some((sc: string) => skillsAreEqual(sc, gapName))
+          )
+        ) {
+          recommendedResources.push({
+            title: r.title,
+            skillsCovered: r.skillsCovered,
+            url: r.url || '#'
+          });
+        }
+      });
 
-    // Sort gaps by importance desc
-    missingSkills.sort((a, b) => b.importance - a.importance);
-    weakSkills.sort((a, b) => (requiredSkills.find(r => r.name === a.name)?.importance || 0) - (requiredSkills.find(r => r.name === b.name)?.importance || 0));
-
-    // Chart data
-    const chartData = requiredSkills.slice(0, 10).map(req => {
-      const userSkill = userSkills.find(s => s.name.toLowerCase() === req.name.toLowerCase());
-      const userScore = PROFICIENCY_SCORES[userSkill?.proficiency || ''] || 0;
-      let status: 'matched' | 'weak' | 'missing' = 'missing';
-      if (userScore >= req.requiredProficiency) status = 'matched';
-      else if (userScore > 0) status = 'weak';
-      return {
-        skill: req.name,
-        yourScore: userScore,
-        required: req.requiredProficiency,
-        status,
-        importance: req.importance
+      const finalResult: GapResult = {
+        jobRole: domain.name,
+        matchedSkills,
+        missingSkills,
+        weakSkills: weakSkills.map((w) => w.name),
+        nextSteps,
+        matchPercent: computedMatchPercent,
+        recommendedResources: recommendedResources.slice(0, 4),
+        chartData
       };
-    });
 
-    // Prioritized next steps
-    const nextSteps: string[] = [];
-    if (missingSkills.length === 0 && weakSkills.length === 0) {
-      nextSteps.push('✅ Perfect match! You meet all requirements for this role.');
-      nextSteps.push('Build projects and contribute to open source.');
-      nextSteps.push('Explore advanced topics and certifications.');
-    } else {
-      if (missingSkills.length > 0) {
-        const topMissing = missingSkills.slice(0, 3).map(m => m.name).join(', ');
-        nextSteps.push(`1. Learn priority gaps: ${topMissing}`);
+      setResult(finalResult);
+
+      if (currentUser?.id) {
+        const dbRoleId = domain.id.startsWith('job-') ? undefined : domain.id;
+        persistActivePath(
+          {
+            id: dbRoleId,
+            roleName: domain.name,
+            domain: domain.domain,
+            missingSkills,
+            weakSkills: weakSkills.map((w) => w.name)
+          } as ActivePathPayload,
+          currentUser.id
+        );
       }
-      if (weakSkills.length > 0) {
-        const topWeak = weakSkills.slice(0, 2).map(w => w.name).join(', ');
-        nextSteps.push(`2. Improve proficiency in: ${topWeak}`);
-      }
-      nextSteps.push('3. Check recommended resources below.');
-      nextSteps.push('4. Apply learning through small projects.');
-      nextSteps.push('5. Track progress in your skill dashboard.');
+    } catch (e: any) {
+      setError(e.message || 'Gap analysis failed');
+    } finally {
+      setLoading(false);
     }
-
-    // Resources matching gaps
-    const gapSkills = [...matchedSkills, ...missingSkills.map(m => m.name), ...weakSkills.map(w => w.name)];
-    const recommendedResources: Array<{title: string; skillsCovered: string[]; url: string}> = [];
-    (resources as any[]).concat(LEARNING_RESOURCES).forEach((r: any) => {
-      if (gapSkills.some(gap => r.skillsCovered.some((sc: string) => sc.toLowerCase() === gap.toLowerCase()))) {
-        recommendedResources.push({title: r.title, skillsCovered: r.skillsCovered, url: r.url || '#' });
-      }
-    });
-
-    const finalResult: GapResult = {
-      jobRole: domain.name,
-      matchedSkills,
-      missingSkills: missingSkills.map(m => m.name),
-      weakSkills: weakSkills.map(w => w.name),
-      nextSteps,
-      matchPercent: computedMatchPercent,
-      recommendedResources: recommendedResources.slice(0, 4),
-      chartData
-    };
-
-    setResult(finalResult);
-
-    // Persist active path
-    const currentUser = await getCurrentUser();
-    if (currentUser?.id) {
-      const dbRoleId = domain.id.startsWith('job-') ? undefined : domain.id;
-      persistActivePath({
-        id: dbRoleId,
-        roleName: domain.name,
-        domain: domain.domain,
-        missingSkills: missingSkills.map((m) => m.name),
-        weakSkills: weakSkills.map((w) => w.name)
-      } as ActivePathPayload, currentUser.id);
-    }
-
-    setLoading(false);
   }
 
   // ── Render ─────────────────────────────────────────────────────────────────

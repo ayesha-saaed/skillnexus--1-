@@ -1,42 +1,50 @@
 -- sql-dialect=postgres
 -- Seed learning resources for every row in public.skills (5 types per skill).
--- Run after sql/seed_domains_skills.sql. Safe to re-run (unique URLs per skill + type).
+-- Uses real external URLs (MDN, Coursera, YouTube, Google search, FreeCodeCamp).
+-- Run after sql/seed_domains_skills.sql. Safe to re-run.
 
-INSERT INTO public.resources (title, description, url, type, skills_covered, difficulty, domain)
+-- Remove old placeholder links that 404 / Cloudflare tunnel errors
+DELETE FROM public.resources
+WHERE url LIKE 'https://skillnexus.dev/learn/%';
+
+INSERT INTO public.resources (title, description, url, type, skills_covered, difficulty, domain, platform)
 SELECT
   s.name || ' — Official Documentation',
-  'Documentation and reference material for ' || s.name || '.',
-  'https://skillnexus.dev/learn/' || s.id::text || '/documentation',
+  'Documentation and reference material for ' || s.name || ' (MDN / official docs search).',
+  'https://developer.mozilla.org/en-US/search?q=' || replace(trim(s.name), ' ', '+'),
   'Documentation',
   ARRAY[s.name],
   'Beginner',
-  COALESCE(d.name, 'General')
+  COALESCE(d.name, 'General'),
+  'MDN'
 FROM public.skills s
 LEFT JOIN public.domains d ON d.id = s.domain_id
 
 UNION ALL
 
 SELECT
-  s.name || ' — Structured Course',
-  'In-depth course covering fundamentals and practice for ' || s.name || '.',
-  'https://skillnexus.dev/learn/' || s.id::text || '/course',
+  s.name || ' — Coursera Courses',
+  'Browse Coursera courses related to ' || s.name || '.',
+  'https://www.coursera.org/search?query=' || replace(trim(s.name), ' ', '%20'),
   'Course',
   ARRAY[s.name],
   'Intermediate',
-  COALESCE(d.name, 'General')
+  COALESCE(d.name, 'General'),
+  'Coursera'
 FROM public.skills s
 LEFT JOIN public.domains d ON d.id = s.domain_id
 
 UNION ALL
 
 SELECT
-  s.name || ' — Video Tutorials',
-  'Video walkthroughs and demos for ' || s.name || '.',
-  'https://skillnexus.dev/learn/' || s.id::text || '/video',
+  s.name || ' — YouTube Tutorials',
+  'Video tutorials and walkthroughs for ' || s.name || '.',
+  'https://www.youtube.com/results?search_query=' || replace(trim(s.name), ' ', '+') || '+tutorial',
   'Video',
   ARRAY[s.name],
   'Beginner',
-  COALESCE(d.name, 'General')
+  COALESCE(d.name, 'General'),
+  'YouTube'
 FROM public.skills s
 LEFT JOIN public.domains d ON d.id = s.domain_id
 
@@ -44,25 +52,27 @@ UNION ALL
 
 SELECT
   s.name || ' — Articles & Guides',
-  'Articles, blog posts, and guides about ' || s.name || '.',
-  'https://skillnexus.dev/learn/' || s.id::text || '/article',
+  'Curated articles and guides about ' || s.name || ' (Google search).',
+  'https://www.google.com/search?q=' || replace(trim(s.name), ' ', '+') || '+programming+tutorial',
   'Article',
   ARRAY[s.name],
   'Intermediate',
-  COALESCE(d.name, 'General')
+  COALESCE(d.name, 'General'),
+  'Google'
 FROM public.skills s
 LEFT JOIN public.domains d ON d.id = s.domain_id
 
 UNION ALL
 
 SELECT
-  s.name || ' — Practice Platform',
-  'Hands-on exercises and challenges for ' || s.name || '.',
-  'https://skillnexus.dev/learn/' || s.id::text || '/practice',
+  s.name || ' — Practice & Exercises',
+  'Hands-on practice and exercises for ' || s.name || '.',
+  'https://www.freecodecamp.org/news/search/?query=' || replace(trim(s.name), ' ', '%20'),
   'Practice Platform',
   ARRAY[s.name],
   'Advanced',
-  COALESCE(d.name, 'General')
+  COALESCE(d.name, 'General'),
+  'freeCodeCamp'
 FROM public.skills s
 LEFT JOIN public.domains d ON d.id = s.domain_id
 
@@ -72,7 +82,8 @@ ON CONFLICT (url) DO UPDATE SET
   type = EXCLUDED.type,
   skills_covered = EXCLUDED.skills_covered,
   difficulty = EXCLUDED.difficulty,
-  domain = EXCLUDED.domain;
+  domain = EXCLUDED.domain,
+  platform = EXCLUDED.platform;
 
 SELECT COUNT(*) AS total_resources FROM public.resources;
 SELECT s.name AS skill, COUNT(r.id) AS resource_count

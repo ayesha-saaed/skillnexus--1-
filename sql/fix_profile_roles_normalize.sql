@@ -14,5 +14,8 @@ END
 WHERE role IS NULL
    OR lower(trim(role)) NOT IN ('admin', 'moderator', 'student');
 
--- Optional: demote all admins except your email (uncomment and edit email)
--- UPDATE public.profiles SET role = 'student' WHERE role = 'admin' AND email NOT ILIKE 'you@example.com';
+-- Keep only your account as admin; set teammates to student (edit the email):
+-- UPDATE public.profiles
+-- SET role = 'student'
+-- WHERE role = 'admin'
+--   AND email NOT ILIKE 'ayeshrao2004@gmail.com';

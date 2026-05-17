@@ -11,6 +11,7 @@ import { GoogleGenAI } from "@google/genai";
 import { MASTER_SKILLS, SYNONYMS, JOB_ROLES, INDUSTRY_DEMAND, LEARNING_RESOURCES } from "./src/lib/knowledge_base";
 import { INDUSTRY_DEMAND_HISTORICAL, CURATED_RESOURCES } from "./src/lib/data_seeder";
 import { normalizeSkill } from "./src/lib/skillNormalization";
+import { skillMatchKey } from "./src/lib/skillMatching";
 
 dotenv.config();
 
@@ -198,21 +199,30 @@ function analyzeGaps(userSkillsRaw: any[], requiredSkills: any[], domain?: strin
   const TfIdf = (natural as any).TfIdf;
   const tfidf = new TfIdf();
 
-  // Normalize user skills
-  const userSkillsCanonical = userSkillsRaw.map(s => {
-    const name = typeof s === 'string' ? s : (s.skillName || s.name);
-    const proficiency = typeof s?.proficiency === "number"
-      ? s.proficiency
-      : (typeof s?.proficiencyLevel === "number" ? s.proficiencyLevel : 0.5);
-    return { name: normalizeSkill(name), proficiency };
+  const userSkillsCanonical = userSkillsRaw.map((s) => {
+    const rawName = typeof s === "string" ? s : s.skillName || s.name;
+    const proficiency =
+      typeof s?.proficiency === "number"
+        ? s.proficiency
+        : typeof s?.proficiencyLevel === "number"
+          ? s.proficiencyLevel
+          : proficiencyToLevel(s?.proficiency ?? s?.proficiencyLevel);
+    return {
+      name: normalizeSkill(rawName),
+      matchKey: skillMatchKey(rawName),
+      proficiency
+    };
   });
 
-  // Normalize required skills
-  const requiredSkillsCanonical = requiredSkills.map((s: any) => ({
-    name: normalizeSkill(typeof s === 'string' ? s : s.name),
-    importance: typeof s?.importance === "number" ? s.importance : 0.7,
-    requiredProficiency: typeof s?.requiredProficiency === "number" ? s.requiredProficiency : 0.8
-  }));
+  const requiredSkillsCanonical = requiredSkills.map((s: any) => {
+    const rawName = typeof s === "string" ? s : s.name;
+    return {
+      name: normalizeSkill(rawName),
+      matchKey: skillMatchKey(rawName),
+      importance: typeof s?.importance === "number" ? s.importance : 0.7,
+      requiredProficiency: typeof s?.requiredProficiency === "number" ? s.requiredProficiency : 0.8
+    };
+  });
 
   const userDoc = userSkillsCanonical.map(s => s.name).join(" ");
   const jobDoc = requiredSkillsCanonical.map(s => s.name).join(" ");
@@ -240,16 +250,16 @@ function analyzeGaps(userSkillsRaw: any[], requiredSkills: any[], domain?: strin
 
   const similarity = calculateCosineSimilarity(vectors[0], vectors[1]);
   
-  const matched = requiredSkillsCanonical.filter(req =>
-    userSkillsCanonical.some(u => u.name === req.name)
+  const matched = requiredSkillsCanonical.filter((req) =>
+    userSkillsCanonical.some((u) => u.matchKey === req.matchKey)
   );
 
-  const missing = requiredSkillsCanonical.filter(req =>
-    !userSkillsCanonical.some(u => u.name === req.name)
+  const missing = requiredSkillsCanonical.filter(
+    (req) => !userSkillsCanonical.some((u) => u.matchKey === req.matchKey)
   );
 
-  const weakSkillsCanonical = matched.filter(req => {
-    const userSkill = userSkillsCanonical.find(u => u.name === req.name);
+  const weakSkillsCanonical = matched.filter((req) => {
+    const userSkill = userSkillsCanonical.find((u) => u.matchKey === req.matchKey);
     return userSkill && userSkill.proficiency < req.requiredProficiency;
   });
 
@@ -275,7 +285,7 @@ function analyzeGaps(userSkillsRaw: any[], requiredSkills: any[], domain?: strin
 
   const weakSkills = weakSkillsCanonical
     .map(req => {
-      const userSkill = userSkillsCanonical.find(u => u.name === req.name)!;
+      const userSkill = userSkillsCanonical.find((u) => u.matchKey === req.matchKey)!;
       const delta = Math.max(0, req.requiredProficiency - userSkill.proficiency);
       const demandScore = getDemandScore(req.name);
       const finalScore = delta + (demandScore / 100);
@@ -473,17 +483,17 @@ app.post("/api/analyze", requireAuth, async (req, res) => {
     const merged = new Map<string, number>();
     fromDb.forEach((s) => {
       if (!s.skillName) return;
-      const key = normalizeSkill(s.skillName);
+      const key = skillMatchKey(s.skillName);
       merged.set(key, Math.max(merged.get(key) || 0, s.proficiencyLevel));
     });
     providedMapped.forEach((s) => {
       if (!s.skillName) return;
-      const key = normalizeSkill(s.skillName);
+      const key = skillMatchKey(s.skillName);
       merged.set(key, Math.max(merged.get(key) || 0, s.proficiencyLevel));
     });
     inferredFromSummary.forEach((s) => {
       if (!s.skillName) return;
-      const key = normalizeSkill(s.skillName);
+      const key = skillMatchKey(s.skillName);
       merged.set(key, Math.max(merged.get(key) || 0, s.proficiencyLevel || 0.5));
     });
     userSkillsFull = Array.from(merged.entries()).map(([skillName, proficiencyLevel]) => ({ skillName, proficiencyLevel }));
@@ -702,6 +712,19 @@ const adminResourceSchema = z.object({
   skills_covered: z.array(z.string()).optional().default([])
 });
 
+const adminProfilePatchSchema = z
+  .object({
+    role: z.enum(["student", "admin", "moderator"]).optional(),
+    name: z.string().min(2).max(80).optional(),
+    level: z.number().int().min(1).optional(),
+    points: z.number().int().min(0).optional(),
+    badges: z.array(z.string()).optional(),
+    active_job_role_id: z.string().uuid().nullable().optional(),
+    active_job_role_name: z.string().nullable().optional(),
+    active_path_domain: z.string().nullable().optional()
+  })
+  .refine((body) => Object.keys(body).length > 0, { message: "At least one field is required" });
+
 app.post("/api/admin/roles", requireAuth, requireAdmin, async (req, res) => {
   try {
     const parsed = adminRoleSchema.safeParse(req.body);
@@ -844,6 +867,31 @@ app.get("/api/admin/users", requireAuth, requireAdmin, async (_req, res) => {
     return res.json({ users: data || [] });
   } catch (error: any) {
     return apiError(res, 500, "SERVER_ERROR", "Failed to list users", error.message);
+  }
+});
+
+app.patch("/api/admin/users/:id", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const parsed = adminProfilePatchSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return apiError(res, 400, "VALIDATION_ERROR", "Invalid profile payload", parsed.error.flatten());
+    }
+
+    const { data, error } = await supabaseAdmin!
+      .from("profiles")
+      .update({ ...parsed.data, updated_at: new Date().toISOString() })
+      .eq("id", id)
+      .select("*")
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!data) return apiError(res, 404, "NOT_FOUND", "User profile not found");
+
+    auditLog("admin.user.updated", { actor: (req as AuthedRequest).authUser?.id, userId: id });
+    return res.json({ user: data });
+  } catch (error: any) {
+    return apiError(res, 500, "SERVER_ERROR", "Failed to update user profile", error.message);
   }
 });
 

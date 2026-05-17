@@ -73,6 +73,21 @@ export function isValidHttpUrl(value: string): boolean {
   }
 }
 
+/** Blocks internal placeholder URLs that are not real course pages. */
+export function isPlaceholderResourceUrl(value: string): boolean {
+  const t = value.trim().toLowerCase();
+  if (!t) return false;
+  try {
+    const host = new URL(t).hostname.replace(/^www\./, '');
+    if (host === 'skillnexus.dev' || host.endsWith('.skillnexus.dev')) {
+      return t.includes('/learn/') || t.includes('localhost');
+    }
+  } catch {
+    return false;
+  }
+  return false;
+}
+
 export function isValidBadgeToken(token: string): boolean {
   const t = token.trim().toLowerCase();
   return t.length >= 2 && t.length <= 32 && BADGE_TOKEN_REGEX.test(t);

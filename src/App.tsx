@@ -48,7 +48,7 @@ if (u) {
               ? 'admin'
               : 'student';
 
-          const profileData = {
+          const profileData: Record<string, unknown> = {
             id: u.id,
             name:
               u.user_metadata?.full_name ||
@@ -56,12 +56,16 @@ if (u) {
               u.email?.split('@')[0] ||
               'New User',
             email: u.email,
-            role,
             points: existing?.points ?? 0,
             level: existing?.level ?? 1,
             badges: existing?.badges ?? [],
             updated_at: new Date().toISOString()
           };
+
+          // Never overwrite role on login for existing profiles (admin changes must stick).
+          if (!existing) {
+            profileData.role = role;
+          }
 
           const { error } = await supabase
             .from('profiles')

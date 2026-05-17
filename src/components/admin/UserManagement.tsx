@@ -102,6 +102,28 @@ export function UserManagement({ showToast, usersNav, onUsersNavConsumed }: User
     { value: 'moderator', label: 'Moderator' }
   ];
 
+  async function patchUserViaAdminApi(
+    userId: string,
+    payload: Record<string, unknown>
+  ): Promise<UserProfile> {
+    const token = await getAccessToken();
+    if (!token) throw new Error('Unable to authenticate admin session. Please sign in again.');
+
+    const response = await fetch(`/api/admin/users/${userId}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify(payload)
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(body?.error?.message || `Failed to update user (${response.status})`);
+    }
+    return normalizeUserRow(body.user as UserProfile);
+  }
+
   const fetchUsers = useCallback(async () => {
     try {
       setLoading(true);
@@ -238,9 +260,7 @@ export function UserManagement({ showToast, usersNav, onUsersNavConsumed }: User
 
     try {
       setLoading(true);
-      const { error } = await supabase.from('profiles').update({ role }).eq('id', editingId);
-
-      if (error) throw error;
+      await patchUserViaAdminApi(editingId, { role });
       showToast('User role updated successfully', 'success');
       setIsModalOpen(false);
       await fetchUsers();
@@ -268,7 +288,7 @@ export function UserManagement({ showToast, usersNav, onUsersNavConsumed }: User
   }
 
   function openRoleModal(user: UserProfile) {
-    setFormData({ role: user.role });
+    setFormData({ role: normalizeProfileRole(user.role) });
     setEditingId(user.id);
     setIsModalOpen(true);
   }
@@ -304,38 +324,28 @@ export function UserManagement({ showToast, usersNav, onUsersNavConsumed }: User
     try {
       setSavingProfile(true);
       const badges = badgesCheck.ok ? badgesCheck.badges : [];
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          name: profileForm.name.trim(),
-          role: normalizeProfileRole(profileForm.role),
-          level: levelNum,
-          points: pointsNum,
-          badges,
-          active_job_role_id,
-          active_job_role_name: selectedRole ? selectedRole.role_name : null,
-          active_path_domain: pathTrim || null,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', detailsUser.id);
-
-      if (error) throw error;
+      const u = await patchUserViaAdminApi(detailsUser.id, {
+        name: profileForm.name.trim(),
+        role: normalizeProfileRole(profileForm.role),
+        level: levelNum,
+        points: pointsNum,
+        badges,
+        active_job_role_id,
+        active_job_role_name: selectedRole ? selectedRole.role_name : null,
+        active_path_domain: pathTrim || null
+      });
       showToast('Profile updated', 'success');
       await fetchUsers();
-      const { data: fresh } = await supabase.from('profiles').select('*').eq('id', detailsUser.id).single();
-      if (fresh) {
-        const u = normalizeUserRow(fresh as UserProfile);
-        setDetailsUser(u);
-        setProfileForm({
-          name: u.name || '',
-          role: u.role,
-          level: String(u.level ?? 1),
-          points: String(u.points ?? 0),
-          badges: (u.badges || []).join(', '),
-          active_job_role_id: u.active_job_role_id || '',
-          active_path_domain: u.active_path_domain || ''
-        });
-      }
+      setDetailsUser(u);
+      setProfileForm({
+        name: u.name || '',
+        role: u.role,
+        level: String(u.level ?? 1),
+        points: String(u.points ?? 0),
+        badges: (u.badges || []).join(', '),
+        active_job_role_id: u.active_job_role_id || '',
+        active_path_domain: u.active_path_domain || ''
+      });
     } catch (err: any) {
       showToast(err.message || 'Failed to update profile', 'error');
     } finally {

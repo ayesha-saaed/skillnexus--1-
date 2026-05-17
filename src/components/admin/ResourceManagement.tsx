@@ -12,6 +12,7 @@ import {
   isValidResourceTitle,
   isValidResourceDescription,
   isValidHttpUrl,
+  isPlaceholderResourceUrl,
   isValidResourceType,
   isValidResourceDifficulty,
   validateCommaSeparatedSkills
@@ -133,6 +134,9 @@ export function ResourceManagement({ showToast }: { showToast: ShowToastFn }) {
     if (!formData.url.trim()) newErrors.url = 'URL is required';
     else if (!isValidHttpUrl(formData.url)) {
       newErrors.url = 'Enter a valid http:// or https:// URL (max 2048 characters).';
+    } else if (isPlaceholderResourceUrl(formData.url)) {
+      newErrors.url =
+        'Use a real course link (YouTube, Coursera, MDN, freeCodeCamp, etc.). skillnexus.dev/learn/… placeholders are not valid.';
     }
     if (!isValidResourceType(formData.type)) {
       newErrors.type = 'Choose a valid resource type.';
