@@ -5,7 +5,7 @@ import { Plus, Trash2, Search, Award, BarChart3, BookOpen, TrendingUp } from 'lu
 import { cn } from '../lib/utils';
 import { gamificationService } from '../services/gamificationService';
 import { learningService } from '../services/learningService';
-import { isValidSkillToken, isValidProficiency } from '../lib/inputValidation';
+import { skillTokenError, isValidProficiency } from '../lib/inputValidation';
 
 interface AddSkillProps {
   onNavigate: (page: any) => void;
@@ -18,6 +18,7 @@ export function AddSkill({ onNavigate, user }: AddSkillProps) {
   const [proficiency, setProficiency] = useState('Beginner');
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [skillFieldError, setSkillFieldError] = useState('');
   const [learningStats, setLearningStats] = useState({ completedCount: 0, totalEnrolled: 0, totalTime: 0 });
   const [skillEventCount, setSkillEventCount] = useState(0);
 
@@ -71,10 +72,10 @@ export function AddSkill({ onNavigate, user }: AddSkillProps) {
   async function handleAdd() {
     const trimmedSkill = newSkill.trim();
     if (!trimmedSkill) return;
-    if (!isValidSkillToken(trimmedSkill)) {
-      setErrorMessage(
-        "Skill name must be 2–80 characters; start with a letter, number, or . + #; then letters, numbers, spaces, and -+#.() and apostrophe (')."
-      );
+    const skillErr = skillTokenError(trimmedSkill);
+    if (skillErr) {
+      setSkillFieldError(skillErr);
+      setErrorMessage(skillErr);
       return;
     }
     if (!isValidProficiency(proficiency)) {
@@ -83,6 +84,7 @@ export function AddSkill({ onNavigate, user }: AddSkillProps) {
     }
     setLoading(true);
     setErrorMessage('');
+    setSkillFieldError('');
     try {
       const { error } = await supabase.from('user_skills').insert({
         user_id: user.id,
@@ -189,10 +191,19 @@ export function AddSkill({ onNavigate, user }: AddSkillProps) {
               <input
                 type="text"
                 value={newSkill}
-                onChange={(e) => setNewSkill(e.target.value)}
+                onChange={(e) => {
+                  setNewSkill(e.target.value);
+                  if (skillFieldError) setSkillFieldError('');
+                }}
+                onBlur={() => setSkillFieldError(skillTokenError(newSkill) ?? '')}
                 placeholder="e.g. JavaScript, Python, React"
-                className="w-full pl-11 pr-4 py-3 bg-black/30 border border-white/10 rounded-xl text-sm text-white focus:border-blue-500 outline-none transition-all placeholder:text-zinc-500"
+                className={`w-full pl-11 pr-4 py-3 bg-black/30 border rounded-xl text-sm text-white focus:border-blue-500 outline-none transition-all placeholder:text-zinc-500 ${
+                  skillFieldError ? 'border-red-500/60' : 'border-white/10'
+                }`}
               />
+              {skillFieldError && (
+                <p className="mt-1.5 px-1 text-xs text-rose-400">{skillFieldError}</p>
+              )}
             </div>
           </div>
           <div className="md:col-span-4">

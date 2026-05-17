@@ -6,7 +6,7 @@ import { AdminTable } from './AdminTable';
 import { AdminModal } from './AdminModal';
 import { AdminInput } from './AdminInput';
 import type { ShowToastFn } from './useToast';
-import { isValidDomainLabel } from '../../lib/inputValidation';
+import { domainLabelError, resourceDescriptionError } from '../../lib/inputValidation';
 import { resourcesForDomain, countLabel, type ResourceLike } from '../../lib/resourceLinking';
 import { LearningResourcesPanel } from './LearningResourcesPanel';
 
@@ -77,12 +77,10 @@ export function DomainManagement({ showToast }: { showToast: ShowToastFn }) {
 
   function validateForm(): string | null {
     const newErrors: Record<string, string> = {};
-    if (!formData.name.trim()) newErrors.name = 'Domain name is required';
-    else if (!isValidDomainLabel(formData.name.trim())) {
-      newErrors.name =
-        'Use 2–80 characters; start with a letter, number, or . + #; then letters, numbers, spaces, hyphen, ampersand, slash, comma, plus, period, parentheses, and apostrophe.';
-    }
-    if (!formData.description.trim()) newErrors.description = 'Description is required';
+    const nameErr = domainLabelError(formData.name);
+    if (nameErr) newErrors.name = nameErr;
+    const descErr = resourceDescriptionError(formData.description);
+    if (descErr) newErrors.description = descErr;
     setErrors(newErrors);
     if (Object.keys(newErrors).length) {
       return Object.values(newErrors)[0];
@@ -318,6 +316,8 @@ export function DomainManagement({ showToast }: { showToast: ShowToastFn }) {
           placeholder="e.g., Web Development"
           error={errors.name}
           required
+          validator={domainLabelError}
+          onValidated={(err) => setErrors((prev) => ({ ...prev, name: err ?? '' }))}
         />
         <AdminInput
           label="Description"
@@ -327,6 +327,8 @@ export function DomainManagement({ showToast }: { showToast: ShowToastFn }) {
           placeholder="Detailed description of this domain..."
           error={errors.description}
           required
+          validator={resourceDescriptionError}
+          onValidated={(err) => setErrors((prev) => ({ ...prev, description: err ?? '' }))}
         />
 <div className="space-y-2">
           <label className="block text-sm font-medium text-zinc-300">Color</label>

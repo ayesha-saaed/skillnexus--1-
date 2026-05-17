@@ -7,7 +7,7 @@ import { AdminModal } from './AdminModal';
 import { AdminInput } from './AdminInput';
 import { AdminSelect } from './AdminSelect';
 import type { ShowToastFn } from './useToast';
-import { isValidDisplayName, isValidResourceDescription } from '../../lib/inputValidation';
+import { skillTokenError, resourceDescriptionError } from '../../lib/inputValidation';
 import { resourcesForSkill, countLabel, type ResourceLike } from '../../lib/resourceLinking';
 import { LearningResourcesPanel } from './LearningResourcesPanel';
 
@@ -139,15 +139,10 @@ export function SkillManagement({ showToast }: { showToast: ShowToastFn }) {
 
   function validateForm(): string | null {
     const newErrors: Record<string, string> = {};
-    if (!formData.name.trim()) newErrors.name = 'Skill name is required';
-    else if (!isValidDisplayName(formData.name.trim())) {
-      newErrors.name =
-        "Use 2–80 characters; start with a letter, number, or . + #; then letters, numbers, spaces, and -+#.() and apostrophe (').";
-    }
-    if (!formData.description.trim()) newErrors.description = 'Description is required';
-    else if (!isValidResourceDescription(formData.description.trim())) {
-      newErrors.description = 'Description must be 10–2000 characters with no control characters.';
-    }
+    const nameErr = skillTokenError(formData.name);
+    if (nameErr) newErrors.name = nameErr;
+    const descErr = resourceDescriptionError(formData.description);
+    if (descErr) newErrors.description = descErr;
     // domain_id is optional: lets you add catalog skills before any domains exist in the DB
     setErrors(newErrors);
     if (Object.keys(newErrors).length) return Object.values(newErrors)[0];
@@ -411,6 +406,8 @@ export function SkillManagement({ showToast }: { showToast: ShowToastFn }) {
           placeholder="e.g., React.js, TypeScript"
           error={errors.name}
           required
+          validator={skillTokenError}
+          onValidated={(err) => setErrors((prev) => ({ ...prev, name: err ?? '' }))}
         />
         {domains.length === 0 && (
           <p className="text-xs text-amber-200/90 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
@@ -433,6 +430,8 @@ export function SkillManagement({ showToast }: { showToast: ShowToastFn }) {
           placeholder="What will students learn?"
           error={errors.description}
           required
+          validator={resourceDescriptionError}
+          onValidated={(err) => setErrors((prev) => ({ ...prev, description: err ?? '' }))}
         />
         <LearningResourcesPanel
           title="Linked learning resources"

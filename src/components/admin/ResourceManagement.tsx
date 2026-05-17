@@ -9,8 +9,9 @@ import { AdminSelect } from './AdminSelect';
 import type { ShowToastFn } from './useToast';
 import type { ResourceRow } from '../../types/database';
 import {
-  isValidResourceTitle,
-  isValidResourceDescription,
+  resourceTitleError,
+  resourceDescriptionError,
+  domainLabelError,
   isValidHttpUrl,
   isPlaceholderResourceUrl,
   isValidResourceType,
@@ -123,14 +124,12 @@ export function ResourceManagement({ showToast }: { showToast: ShowToastFn }) {
 
   function validateForm() {
     const newErrors: Record<string, string> = {};
-    if (!formData.title.trim()) newErrors.title = 'Title is required';
-    else if (!isValidResourceTitle(formData.title.trim())) {
-      newErrors.title = 'Title: 3–120 characters; start with a letter, number, or . + #';
-    }
-    if (!formData.description.trim()) newErrors.description = 'Description is required';
-    else if (!isValidResourceDescription(formData.description.trim())) {
-      newErrors.description = 'Description must be 10–2000 characters with no control characters.';
-    }
+    const titleErr = resourceTitleError(formData.title);
+    if (titleErr) newErrors.title = titleErr;
+    const descErr = resourceDescriptionError(formData.description);
+    if (descErr) newErrors.description = descErr;
+    const domainErr = domainLabelError(formData.domain);
+    if (domainErr) newErrors.domain = domainErr;
     if (!formData.url.trim()) newErrors.url = 'URL is required';
     else if (!isValidHttpUrl(formData.url)) {
       newErrors.url = 'Enter a valid http:// or https:// URL (max 2048 characters).';
@@ -453,6 +452,8 @@ export function ResourceManagement({ showToast }: { showToast: ShowToastFn }) {
           placeholder="e.g., React Fundamentals"
           error={errors.title}
           required
+          validator={resourceTitleError}
+          onValidated={(err) => setErrors((prev) => ({ ...prev, title: err ?? '' }))}
         />
         <AdminInput
           label="Description"
@@ -462,6 +463,8 @@ export function ResourceManagement({ showToast }: { showToast: ShowToastFn }) {
           placeholder="Brief description of the resource..."
           error={errors.description}
           required
+          validator={resourceDescriptionError}
+          onValidated={(err) => setErrors((prev) => ({ ...prev, description: err ?? '' }))}
         />
         <AdminInput
           label="URL"
@@ -471,6 +474,16 @@ export function ResourceManagement({ showToast }: { showToast: ShowToastFn }) {
           placeholder="https://example.com/course"
           error={errors.url}
           required
+          validator={(value) => {
+            const t = value.trim();
+            if (!t) return 'URL is required';
+            if (!isValidHttpUrl(t)) return 'Enter a valid http:// or https:// URL (max 2048 characters).';
+            if (isPlaceholderResourceUrl(t)) {
+              return 'Use a real course link (YouTube, Coursera, MDN, freeCodeCamp, etc.). skillnexus.dev/learn/… placeholders are not valid.';
+            }
+            return null;
+          }}
+          onValidated={(err) => setErrors((prev) => ({ ...prev, url: err ?? '' }))}
         />
         <AdminSelect
           label="Resource Type"
@@ -489,9 +502,15 @@ export function ResourceManagement({ showToast }: { showToast: ShowToastFn }) {
         <AdminSelect
           label="Domain"
           value={formData.domain}
-          onChange={(value) => setFormData({ ...formData, domain: value })}
+          onChange={(value) => {
+            setFormData({ ...formData, domain: value });
+            const err = domainLabelError(value);
+            setErrors((prev) => ({ ...prev, domain: err ?? '' }));
+          }}
           options={domains.map((d) => ({ value: d.name, label: d.name }))}
           placeholder="Select a domain"
+          error={errors.domain}
+          required
         />
         <AdminInput
           label="Estimated Duration"
@@ -505,6 +524,11 @@ export function ResourceManagement({ showToast }: { showToast: ShowToastFn }) {
           onChange={(value) => setFormData({ ...formData, skillsCoveredInput: value })}
           placeholder="e.g. React, TypeScript, HTML"
           error={errors.skillsCoveredInput}
+          validator={(value) => {
+            const check = validateCommaSeparatedSkills(value);
+            return check.ok ? null : check.error;
+          }}
+          onValidated={(err) => setErrors((prev) => ({ ...prev, skillsCoveredInput: err ?? '' }))}
         />
       </AdminModal>
 

@@ -7,7 +7,11 @@ import { AdminModal } from './AdminModal';
 import { AdminInput } from './AdminInput';
 import { AdminSelect } from './AdminSelect';
 import type { ShowToastFn } from './useToast';
-import { isValidJobRoleTitle, isValidDomainLabel, validateCommaSeparatedSkills } from '../../lib/inputValidation';
+import {
+  jobRoleTitleError,
+  domainLabelError,
+  validateCommaSeparatedSkills
+} from '../../lib/inputValidation';
 import { resourcesForJobRole, countLabel, type ResourceLike } from '../../lib/resourceLinking';
 import { LearningResourcesPanel } from './LearningResourcesPanel';
 
@@ -93,16 +97,10 @@ export function RoleManagement({ showToast }: { showToast: ShowToastFn }) {
 
   function validateForm() {
     const newErrors: Record<string, string> = {};
-    if (!formData.title.trim()) newErrors.title = 'Role title is required';
-    else if (!isValidJobRoleTitle(formData.title.trim())) {
-      newErrors.title =
-        "Use 3–120 characters; start with a letter, number, or . + #; then letters, numbers, spaces, and -&,./() and apostrophe (').";
-    }
-    if (!formData.domain.trim()) newErrors.domain = 'Domain / category is required';
-    else if (!isValidDomainLabel(formData.domain.trim())) {
-      newErrors.domain =
-        "Use 2–80 characters; start with a letter, number, or . + #; then letters, numbers, spaces, and -&/,+.() and apostrophe (').";
-    }
+    const titleErr = jobRoleTitleError(formData.title);
+    if (titleErr) newErrors.title = titleErr;
+    const domainErr = domainLabelError(formData.domain);
+    if (domainErr) newErrors.domain = domainErr;
     const skillsCheck = validateCommaSeparatedSkills(formData.requiredSkills);
     if (!skillsCheck.ok) newErrors.requiredSkills = skillsCheck.error;
     setErrors(newErrors);
@@ -341,13 +339,20 @@ export function RoleManagement({ showToast }: { showToast: ShowToastFn }) {
           placeholder="e.g. Frontend Developer"
           error={errors.title}
           required
+          validator={jobRoleTitleError}
+          onValidated={(err) => setErrors((prev) => ({ ...prev, title: err ?? '' }))}
         />
         {domainOptions.length > 0 ? (
           <AdminSelect
             label="Domain / Category"
             value={formData.domain}
-            onChange={(value) => setFormData({ ...formData, domain: value })}
+            onChange={(value) => {
+              setFormData({ ...formData, domain: value });
+              const err = domainLabelError(value);
+              setErrors((prev) => ({ ...prev, domain: err ?? '' }));
+            }}
             options={domainOptions}
+            error={errors.domain}
             required
           />
         ) : (
@@ -358,6 +363,8 @@ export function RoleManagement({ showToast }: { showToast: ShowToastFn }) {
             placeholder="e.g. Cloud/DevOps"
             error={errors.domain}
             required
+            validator={domainLabelError}
+            onValidated={(err) => setErrors((prev) => ({ ...prev, domain: err ?? '' }))}
           />
         )}
         <AdminSelect
@@ -372,6 +379,11 @@ export function RoleManagement({ showToast }: { showToast: ShowToastFn }) {
           onChange={(value) => setFormData({ ...formData, requiredSkills: value })}
           placeholder="Comma-separated skills, e.g. HTML, CSS, JavaScript"
           error={errors.requiredSkills}
+          validator={(value) => {
+            const check = validateCommaSeparatedSkills(value);
+            return check.ok ? null : check.error;
+          }}
+          onValidated={(err) => setErrors((prev) => ({ ...prev, requiredSkills: err ?? '' }))}
         />
         <LearningResourcesPanel
           resources={previewLinkedResources}

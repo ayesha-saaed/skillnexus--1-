@@ -12,6 +12,22 @@ import { MASTER_SKILLS, SYNONYMS, JOB_ROLES, INDUSTRY_DEMAND, LEARNING_RESOURCES
 import { INDUSTRY_DEMAND_HISTORICAL, CURATED_RESOURCES } from "./src/lib/data_seeder";
 import { normalizeSkill } from "./src/lib/skillNormalization";
 import { skillMatchKey } from "./src/lib/skillMatching";
+import {
+  isValidDomainLabel,
+  isValidSkillToken,
+  isValidJobRoleTitle,
+  isValidResourceTitle,
+  isValidResourceDescription,
+  isValidHttpUrl,
+  isPlaceholderResourceUrl,
+  isValidResourceType,
+  isValidResourceDifficulty,
+  MSG_DOMAIN,
+  MSG_SKILL,
+  MSG_JOB_ROLE,
+  MSG_RESOURCE_TITLE,
+  MSG_DESCRIPTION
+} from "./src/lib/inputValidation";
 
 dotenv.config();
 
@@ -676,41 +692,115 @@ app.post("/api/admin/seed", requireAuth, requireAdmin, async (req, res) => {
   }
 });
 
-const adminRoleSchema = z.object({
-  id: z.string().uuid().optional(),
-  title: z.string().min(2),
-  domain: z.string().min(1).default('Custom'),
-  difficulty: z.string().min(1).default('Intermediate'),
-  requiredSkills: z.array(z.string()).default([])
-});
+const adminRoleSchema = z
+  .object({
+    id: z.string().uuid().optional(),
+    title: z.string().min(2),
+    domain: z.string().min(1).default("Custom"),
+    difficulty: z.string().min(1).default("Intermediate"),
+    requiredSkills: z.array(z.string()).default([])
+  })
+  .superRefine((data, ctx) => {
+    if (!isValidJobRoleTitle(data.title.trim())) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: MSG_JOB_ROLE, path: ["title"] });
+    }
+    if (!isValidDomainLabel(data.domain.trim())) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: MSG_DOMAIN, path: ["domain"] });
+    }
+    data.requiredSkills.forEach((skill, index) => {
+      const s = skill.trim();
+      if (s && !isValidSkillToken(s)) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: MSG_SKILL, path: ["requiredSkills", index] });
+      }
+    });
+  });
 
-const adminDomainSchema = z.object({
-  id: z.string().uuid().optional(),
-  name: z.string().min(2),
-  description: z.string().optional().default(''),
-  icon: z.string().optional(),
-  color: z.string().optional().default('#3b82f6'),
-  image_url: z.string().optional()
-});
+const adminDomainSchema = z
+  .object({
+    id: z.string().uuid().optional(),
+    name: z.string().min(2),
+    description: z.string().optional().default(""),
+    icon: z.string().optional(),
+    color: z.string().optional().default("#3b82f6"),
+    image_url: z.string().optional()
+  })
+  .superRefine((data, ctx) => {
+    if (!isValidDomainLabel(data.name.trim())) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: MSG_DOMAIN, path: ["name"] });
+    }
+    if (!isValidResourceDescription((data.description ?? "").trim())) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: MSG_DESCRIPTION, path: ["description"] });
+    }
+  });
 
-const adminSkillSchema = z.object({
-  id: z.string().uuid().optional(),
-  name: z.string().min(2),
-  description: z.string().min(1),
-  domain_id: z.string().optional().transform((val) => (val?.trim() ? val : null))
-});
+const adminSkillSchema = z
+  .object({
+    id: z.string().uuid().optional(),
+    name: z.string().min(2),
+    description: z.string().min(1),
+    domain_id: z
+      .string()
+      .optional()
+      .transform((val) => (val?.trim() ? val : null))
+  })
+  .superRefine((data, ctx) => {
+    if (!isValidSkillToken(data.name.trim())) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: MSG_SKILL, path: ["name"] });
+    }
+    if (!isValidResourceDescription(data.description.trim())) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: MSG_DESCRIPTION, path: ["description"] });
+    }
+  });
 
-const adminResourceSchema = z.object({
-  id: z.string().uuid().optional(),
-  title: z.string().min(1),
-  description: z.string().optional().default(''),
-  url: z.string().min(1).url(),
-  type: z.string().min(1).default('Course'),
-  difficulty: z.string().min(1).default('Beginner'),
-  duration: z.string().optional().default(''),
-  domain: z.string().optional().default('Full Stack'),
-  skills_covered: z.array(z.string()).optional().default([])
-});
+const adminResourceSchema = z
+  .object({
+    id: z.string().uuid().optional(),
+    title: z.string().min(1),
+    description: z.string().optional().default(""),
+    url: z.string().min(1),
+    type: z.string().min(1).default("Course"),
+    difficulty: z.string().min(1).default("Beginner"),
+    duration: z.string().optional().default(""),
+    domain: z.string().optional().default("Full Stack"),
+    skills_covered: z.array(z.string()).optional().default([])
+  })
+  .superRefine((data, ctx) => {
+    if (!isValidResourceTitle(data.title.trim())) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: MSG_RESOURCE_TITLE, path: ["title"] });
+    }
+    if (!isValidResourceDescription((data.description ?? "").trim())) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: MSG_DESCRIPTION, path: ["description"] });
+    }
+    const url = data.url.trim();
+    if (!isValidHttpUrl(url)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Enter a valid http:// or https:// URL.",
+        path: ["url"]
+      });
+    } else if (isPlaceholderResourceUrl(url)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Use a real course link; skillnexus.dev/learn/… placeholders are not valid.",
+        path: ["url"]
+      });
+    }
+    if (!isValidResourceType(data.type)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid resource type.", path: ["type"] });
+    }
+    if (!isValidResourceDifficulty(data.difficulty)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid difficulty.", path: ["difficulty"] });
+    }
+    if (!isValidDomainLabel((data.domain ?? "").trim())) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: MSG_DOMAIN, path: ["domain"] });
+    }
+    (data.skills_covered ?? []).forEach((skill, index) => {
+      const s = skill.trim();
+      if (s && !isValidSkillToken(s)) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: MSG_SKILL, path: ["skills_covered", index] });
+      }
+    });
+  });
 
 const adminProfilePatchSchema = z
   .object({
@@ -723,7 +813,14 @@ const adminProfilePatchSchema = z
     active_job_role_name: z.string().nullable().optional(),
     active_path_domain: z.string().nullable().optional()
   })
-  .refine((body) => Object.keys(body).length > 0, { message: "At least one field is required" });
+  .refine((body) => Object.keys(body).length > 0, { message: "At least one field is required" })
+  .superRefine((body, ctx) => {
+    if (body.active_path_domain != null && body.active_path_domain.trim()) {
+      if (!isValidDomainLabel(body.active_path_domain.trim())) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: MSG_DOMAIN, path: ["active_path_domain"] });
+      }
+    }
+  });
 
 app.post("/api/admin/roles", requireAuth, requireAdmin, async (req, res) => {
   try {

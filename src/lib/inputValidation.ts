@@ -2,17 +2,17 @@
  * Shared validation for display names, skills, job roles, domains, badges, email, resources, profiles.
  */
 
-/** 2–80 chars; first char letter, digit, or . + # */
-export const DISPLAY_NAME_REGEX = /^[a-zA-Z0-9.+#][a-zA-Z0-9\s\-+#.()/']{1,79}$/;
+/** Skill / catalog name: 2–80 chars; start with letter or . + #; must include a letter */
+export const DISPLAY_NAME_REGEX = /^[a-zA-Z.+#][a-zA-Z0-9\s\-+#.()/']{1,79}$/;
 
-/** Job role / career title: 3–120 chars */
+/** Job role / career title: 3–120 chars; must include a letter */
 export const JOB_ROLE_TITLE_REGEX = /^[a-zA-Z0-9.+#][a-zA-Z0-9\s\-&,./()']{2,119}$/;
 
-/** Domain / category labels */
-export const DOMAIN_LABEL_REGEX = /^[a-zA-Z0-9.+#][a-zA-Z0-9\s\-&/,+.() ]{1,79}$/;
+/** Domain / category: 2–80 chars; must start with a letter and include a letter */
+export const DOMAIN_LABEL_REGEX = /^[a-zA-Z][a-zA-Z0-9\s\-&/,+.() ]{1,79}$/;
 
-/** Resource / course titles */
-export const RESOURCE_TITLE_REGEX = /^[a-zA-Z0-9.+#][a-zA-Z0-9\s\-&:,./()']{2,119}$/;
+/** Resource / course titles: 3–120 chars; must include a letter */
+export const RESOURCE_TITLE_REGEX = /^[a-zA-Z][a-zA-Z0-9\s\-&:,./()']{2,119}$/;
 
 /** Resource description: plain text, no control chars */
 export const RESOURCE_DESCRIPTION_REGEX = /^[\s\S]{10,2000}$/;
@@ -31,9 +31,36 @@ export const RESOURCE_TYPES = ['Documentation', 'Course', 'Video', 'Article', 'P
 export const RESOURCE_DIFFICULTIES = ['Beginner', 'Intermediate', 'Advanced'] as const;
 export const PROFICIENCY_LEVELS = ['Beginner', 'Intermediate', 'Advanced', 'Expert'] as const;
 
-export function isValidDisplayName(value: string): boolean {
+export const MSG_SKILL =
+  'Enter a real skill name (2–80 characters, start with a letter or . + #, include at least one letter — not only numbers).';
+export const MSG_DOMAIN =
+  'Enter a real domain name (2–80 characters, start with a letter, include at least one letter — not only numbers).';
+export const MSG_JOB_ROLE =
+  'Enter a real job role title (3–120 characters, include at least one letter — not only numbers).';
+export const MSG_RESOURCE_TITLE =
+  'Enter a real title (3–120 characters, start with a letter, include at least one letter).';
+export const MSG_DESCRIPTION = 'Description must be 10–2000 characters with no control characters.';
+
+export function containsLetter(value: string): boolean {
+  return /[a-zA-Z]/.test(value);
+}
+
+function passesLabelRules(
+  value: string,
+  minLen: number,
+  maxLen: number,
+  pattern: RegExp,
+  requireLetter = true
+): boolean {
   const t = value.trim();
-  return t.length >= 2 && t.length <= 80 && DISPLAY_NAME_REGEX.test(t);
+  if (t.length < minLen || t.length > maxLen) return false;
+  if (!pattern.test(t)) return false;
+  if (requireLetter && !containsLetter(t)) return false;
+  return true;
+}
+
+export function isValidDisplayName(value: string): boolean {
+  return passesLabelRules(value, 2, 80, DISPLAY_NAME_REGEX, true);
 }
 
 export function isValidSkillToken(s: string): boolean {
@@ -41,25 +68,58 @@ export function isValidSkillToken(s: string): boolean {
 }
 
 export function isValidJobRoleTitle(value: string): boolean {
-  const t = value.trim();
-  return t.length >= 3 && t.length <= 120 && JOB_ROLE_TITLE_REGEX.test(t);
+  return passesLabelRules(value, 3, 120, JOB_ROLE_TITLE_REGEX, true);
 }
 
 export function isValidDomainLabel(value: string): boolean {
-  const t = value.trim();
-  return t.length >= 2 && t.length <= 80 && DOMAIN_LABEL_REGEX.test(t);
+  return passesLabelRules(value, 2, 80, DOMAIN_LABEL_REGEX, true);
 }
 
 export function isValidResourceTitle(value: string): boolean {
-  const t = value.trim();
-  return t.length >= 3 && t.length <= 120 && RESOURCE_TITLE_REGEX.test(t);
+  return passesLabelRules(value, 3, 120, RESOURCE_TITLE_REGEX, true);
 }
 
 export function isValidResourceDescription(value: string): boolean {
   const t = value.trim();
   if (t.length < 10 || t.length > 2000) return false;
   if (/[\x00-\x08\x0B\x0C\x0E-\x1F]/.test(t)) return false;
+  if (!containsLetter(t)) return false;
   return RESOURCE_DESCRIPTION_REGEX.test(t);
+}
+
+export function domainLabelError(value: string): string | null {
+  const t = value.trim();
+  if (!t) return 'Domain name is required';
+  if (!isValidDomainLabel(t)) return MSG_DOMAIN;
+  return null;
+}
+
+export function skillTokenError(value: string): string | null {
+  const t = value.trim();
+  if (!t) return 'Skill name is required';
+  if (!isValidSkillToken(t)) return MSG_SKILL;
+  return null;
+}
+
+export function jobRoleTitleError(value: string): string | null {
+  const t = value.trim();
+  if (!t) return 'Role title is required';
+  if (!isValidJobRoleTitle(t)) return MSG_JOB_ROLE;
+  return null;
+}
+
+export function resourceTitleError(value: string): string | null {
+  const t = value.trim();
+  if (!t) return 'Title is required';
+  if (!isValidResourceTitle(t)) return MSG_RESOURCE_TITLE;
+  return null;
+}
+
+export function resourceDescriptionError(value: string): string | null {
+  const t = value.trim();
+  if (!t) return 'Description is required';
+  if (!isValidResourceDescription(t)) return MSG_DESCRIPTION;
+  return null;
 }
 
 export function isValidHttpUrl(value: string): boolean {
@@ -138,11 +198,9 @@ export function validateCommaSeparatedSkills(
   if (!raw) return { ok: true, skills: [] };
   const parts = raw.split(',').map((p) => p.trim()).filter(Boolean);
   for (const p of parts) {
-    if (!isValidSkillToken(p)) {
-      return {
-        ok: false,
-        error: `Invalid skill "${p}". Use 2–80 characters; start with a letter, number, or . + #.`
-      };
+    const err = skillTokenError(p);
+    if (err) {
+      return { ok: false, error: `Invalid skill "${p}". ${MSG_SKILL}` };
     }
   }
   return { ok: true, skills: parts };
@@ -152,11 +210,9 @@ export function validateSkillNameList(
   skills: string[]
 ): { ok: true; skills: string[] } | { ok: false; error: string } {
   for (const p of skills) {
-    if (!isValidSkillToken(p)) {
-      return {
-        ok: false,
-        error: `Invalid skill "${p}". Use 2–80 characters; start with a letter, number, or . + #.`
-      };
+    const err = skillTokenError(p);
+    if (err) {
+      return { ok: false, error: `Invalid skill "${p}". ${MSG_SKILL}` };
     }
   }
   return { ok: true, skills };
