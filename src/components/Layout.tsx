@@ -178,7 +178,7 @@ export function Layout({ children, user, userRole, onNavigate, currentPage }: La
                 </p>
                 <div className="flex gap-4">
                   <a href="https://github.com/ayesha-saaed" target="_blank" rel="noopener noreferrer" className="p-2 bg-white/5 rounded-lg text-zinc-500 hover:text-blue-500 transition-colors"><Github className="w-4 h-4" /></a>
-                  <a href="https://www.linkedin.com/in/ayesha-saeed07/?utm_source=share_via&utm_content=profile&utm_medium=member_android" target="_blank" rel="noopener noreferrer" className="p-2 bg-white/5 rounded-lg text-zinc-500 hover:text-blue-500 transition-colors"><Linkedin className="w-4 h-4" /></a>
+                  <a href="https://www.linkedin.com/in/ayesha-saeed07?utm_source=share_via&utm_content=profile&utm_medium=member_android" target="_blank" rel="noopener noreferrer" className="p-2 bg-white/5 rounded-lg text-zinc-500 hover:text-blue-500 transition-colors"><Linkedin className="w-4 h-4" /></a>
                 </div>
               </div>
               
