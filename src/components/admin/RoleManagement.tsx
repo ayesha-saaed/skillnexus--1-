@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { Plus, Edit2, Trash2, Search } from 'lucide-react';
 import { supabase, getAccessToken } from '../../lib/supabase';
 import { normalizeText, isDuplicateDbError } from '../../lib/utils';
@@ -14,8 +13,6 @@ import {
   validateCommaSeparatedSkills
 } from '../../lib/inputValidation';
 import { resourcesForJobRole, countLabel, type ResourceLike } from '../../lib/resourceLinking';
-import { LearningResourcesPanel } from './LearningResourcesPanel';
-
 interface JobRole {
   id: string;
   role_name: string;
@@ -218,19 +215,6 @@ export function RoleManagement({ showToast }: { showToast: ShowToastFn }) {
     }
   }
 
-  const debouncedForm = useDebouncedValue(formData, 400);
-
-  const previewLinkedResources = useMemo(() => {
-    const skills = debouncedForm.requiredSkills
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean);
-    return resourcesForJobRole(allResources, {
-      domain: debouncedForm.domain,
-      required_skills: skills
-    });
-  }, [allResources, debouncedForm.domain, debouncedForm.requiredSkills]);
-
   const resourceCountByRoleId = useMemo(() => {
     const counts = new Map<string, number>();
     for (const role of roles) {
@@ -399,11 +383,6 @@ export function RoleManagement({ showToast }: { showToast: ShowToastFn }) {
             return check.ok ? null : check.error;
           }}
           onValidated={(err) => setErrors((prev) => ({ ...prev, requiredSkills: err ?? '' }))}
-        />
-        <LearningResourcesPanel
-          resources={previewLinkedResources}
-          loading={resourcesLoading}
-          emptyHint="Add resources in Admin → Resources with the same domain name and overlapping skills to link them here."
         />
       </AdminModal>
 

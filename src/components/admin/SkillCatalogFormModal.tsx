@@ -1,11 +1,8 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import { AdminModal } from './AdminModal';
 import { AdminInput } from './AdminInput';
 import { AdminSelect } from './AdminSelect';
-import { LearningResourcesPanel } from './LearningResourcesPanel';
 import { skillTokenError, resourceDescriptionError } from '../../lib/inputValidation';
-import { resourcesForSkill, type ResourceLike } from '../../lib/resourceLinking';
-import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { getAccessToken } from '../../lib/supabase';
 import { normalizeText, isDuplicateDbError } from '../../lib/utils';
 
@@ -25,8 +22,6 @@ interface SkillCatalogFormModalProps {
   editingId: string | null;
   initialValues: SkillFormValues;
   domains: DomainOption[];
-  allResources: ResourceLike[];
-  resourcesLoading: boolean;
   catalogSkills: { id: string; name: string }[];
   onClose: () => void;
   onSaved: () => void;
@@ -38,8 +33,6 @@ export function SkillCatalogFormModal({
   editingId,
   initialValues,
   domains,
-  allResources,
-  resourcesLoading,
   catalogSkills,
   onClose,
   onSaved,
@@ -48,14 +41,6 @@ export function SkillCatalogFormModal({
   const [formData, setFormData] = useState<SkillFormValues>(initialValues);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
-
-  const debouncedSkillName = useDebouncedValue(formData.name, 400);
-
-  const previewLinkedResources = useMemo(() => {
-    const name = debouncedSkillName.trim();
-    if (!name) return [];
-    return resourcesForSkill(allResources, name);
-  }, [allResources, debouncedSkillName]);
 
   function validateForm(): string | null {
     const newErrors: Record<string, string> = {};
@@ -174,13 +159,6 @@ export function SkillCatalogFormModal({
         required
         validator={resourceDescriptionError}
         onValidated={(err) => setErrors((prev) => ({ ...prev, description: err ?? '' }))}
-      />
-      <LearningResourcesPanel
-        title="Linked learning resources"
-        resources={previewLinkedResources}
-        loading={resourcesLoading}
-        listMaxHeightClass="max-h-56"
-        emptyHint="Add resources in Admin → Resources with this skill in Skills covered, or run sql/seed_learning_resources_by_skill.sql."
       />
     </AdminModal>
   );

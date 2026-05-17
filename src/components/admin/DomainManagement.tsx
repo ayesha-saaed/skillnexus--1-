@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { Plus, Edit2, Trash2, Search } from 'lucide-react';
 import { supabase, getAccessToken } from '../../lib/supabase';
 import { normalizeText, isDuplicateDbError } from '../../lib/utils';
@@ -9,7 +8,6 @@ import { AdminInput } from './AdminInput';
 import type { ShowToastFn } from './useToast';
 import { domainLabelError, resourceDescriptionError } from '../../lib/inputValidation';
 import { resourcesForDomain, countLabel, type ResourceLike } from '../../lib/resourceLinking';
-import { LearningResourcesPanel } from './LearningResourcesPanel';
 
 interface Domain {
   id: string;
@@ -199,13 +197,6 @@ export function DomainManagement({ showToast }: { showToast: ShowToastFn }) {
     setIsModalOpen(true);
   }
 
-  const debouncedDomainName = useDebouncedValue(formData.name, 400);
-
-  const previewDomainResources = useMemo(
-    () => resourcesForDomain(allResources, debouncedDomainName),
-    [allResources, debouncedDomainName]
-  );
-
   const resourceCountByDomainName = useMemo(() => {
     const counts = new Map<string, number>();
     for (const domain of domains) {
@@ -357,12 +348,6 @@ export function DomainManagement({ showToast }: { showToast: ShowToastFn }) {
             />
           </div>
         </div>
-        <LearningResourcesPanel
-          resources={previewDomainResources}
-          loading={resourcesLoading}
-          title="Learning resources in this domain"
-          emptyHint="Resources appear when their Domain field matches this domain name (set in Admin → Resources)."
-        />
       </AdminModal>
 
       <AdminModal

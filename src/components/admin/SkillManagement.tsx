@@ -307,8 +307,6 @@ export function SkillManagement({ showToast }: { showToast: ShowToastFn }) {
           editingId={editingId}
           initialValues={modalInitial}
           domains={domains}
-          allResources={allResources}
-          resourcesLoading={resourcesLoading}
           catalogSkills={skills}
           onClose={() => {
             setIsModalOpen(false);
