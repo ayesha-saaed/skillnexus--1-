@@ -9,7 +9,7 @@ import { ResourceManagement } from './ResourceManagement';
 import { RoleManagement } from './RoleManagement';
 import { UserManagement } from './UserManagement';
 import { useToast, ToastContainer } from './useToast';
-import type { AdminTab } from './adminTab';
+import type { AdminTab, AdminTabNavigateOptions, OpenAdminTabFn } from './adminTab';
 
 interface AdminDashboardProps {
   onNavigate: (page: any) => void;
@@ -19,7 +19,17 @@ export function AdminDashboard({ onNavigate }: AdminDashboardProps) {
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
+  const [usersNav, setUsersNav] = useState<AdminTabNavigateOptions | null>(null);
   const { toasts, showToast } = useToast();
+
+  const handleOpenTab: OpenAdminTabFn = (tab, options) => {
+    if (tab === 'users' && options?.openUserDetails) {
+      setUsersNav(options);
+    } else {
+      setUsersNav(null);
+    }
+    setActiveTab(tab);
+  };
 
   useEffect(() => {
     checkAdminAccess();
@@ -134,7 +144,10 @@ export function AdminDashboard({ onNavigate }: AdminDashboardProps) {
               return (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
+                  onClick={() => {
+                    setUsersNav(null);
+                    setActiveTab(tab.id);
+                  }}
                   className={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors border-b-2 whitespace-nowrap ${
                     isActive
                       ? 'text-white border-blue-500 bg-white/2'
@@ -160,13 +173,19 @@ export function AdminDashboard({ onNavigate }: AdminDashboardProps) {
           transition={{ duration: 0.2 }}
         >
           {activeTab === 'overview' && (
-            <AdminAnalytics showToast={showToast} onOpenTab={(tab) => setActiveTab(tab)} />
+            <AdminAnalytics showToast={showToast} onOpenTab={handleOpenTab} />
           )}
           {activeTab === 'roles' && <RoleManagement showToast={showToast} />}
           {activeTab === 'domains' && <DomainManagement showToast={showToast} />}
           {activeTab === 'skills' && <SkillManagement showToast={showToast} />}
           {activeTab === 'resources' && <ResourceManagement showToast={showToast} />}
-          {activeTab === 'users' && <UserManagement showToast={showToast} />}
+          {activeTab === 'users' && (
+            <UserManagement
+              showToast={showToast}
+              usersNav={usersNav}
+              onUsersNavConsumed={() => setUsersNav(null)}
+            />
+          )}
         </motion.div>
       </main>
 

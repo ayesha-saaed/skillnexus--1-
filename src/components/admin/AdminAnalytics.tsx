@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Users, Award, BookOpen, Zap, TrendingUp, UserCircle, ChevronRight, LayoutGrid } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import type { ShowToastFn } from './useToast';
-import type { AdminTab } from './adminTab';
+import type { AdminTab, OpenAdminTabFn } from './adminTab';
 
 interface Stats {
   totalUsers: number;
@@ -18,7 +18,7 @@ interface Stats {
 
 interface AdminAnalyticsProps {
   showToast: ShowToastFn;
-  onOpenTab: (tab: AdminTab) => void;
+  onOpenTab: OpenAdminTabFn;
 }
 
 export function AdminAnalytics({ showToast, onOpenTab }: AdminAnalyticsProps) {
@@ -88,6 +88,7 @@ export function AdminAnalytics({ showToast, onOpenTab }: AdminAnalyticsProps) {
     textColor: string;
     iconColor: string;
     targetTab?: AdminTab;
+    openUserDetails?: boolean;
     hint?: string;
   }[] = [
     {
@@ -99,6 +100,7 @@ export function AdminAnalytics({ showToast, onOpenTab }: AdminAnalyticsProps) {
       textColor: 'text-blue-300',
       iconColor: 'text-blue-400',
       targetTab: 'users',
+      openUserDetails: true,
       hint: 'Open user directory & details'
     },
     {
@@ -110,6 +112,7 @@ export function AdminAnalytics({ showToast, onOpenTab }: AdminAnalyticsProps) {
       textColor: 'text-red-300',
       iconColor: 'text-red-400',
       targetTab: 'users',
+      openUserDetails: true,
       hint: 'Manage accounts & roles'
     },
     {
@@ -121,6 +124,7 @@ export function AdminAnalytics({ showToast, onOpenTab }: AdminAnalyticsProps) {
       textColor: 'text-green-300',
       iconColor: 'text-green-400',
       targetTab: 'users',
+      openUserDetails: true,
       hint: 'View learners in Users'
     },
     {
@@ -143,6 +147,7 @@ export function AdminAnalytics({ showToast, onOpenTab }: AdminAnalyticsProps) {
       textColor: 'text-amber-200',
       iconColor: 'text-amber-400',
       targetTab: 'users',
+      openUserDetails: true,
       hint: 'Inspect per-user skills in User details'
     },
     {
@@ -180,7 +185,10 @@ export function AdminAnalytics({ showToast, onOpenTab }: AdminAnalyticsProps) {
               key={idx}
               type="button"
               disabled={!clickable}
-              onClick={() => card.targetTab && onOpenTab(card.targetTab)}
+              onClick={() =>
+                card.targetTab &&
+                onOpenTab(card.targetTab, card.openUserDetails ? { openUserDetails: true } : undefined)
+              }
               className={`text-left w-full ${card.bgColor} border border-white/10 rounded-lg p-6 transition-all ${
                 clickable ? 'hover:border-white/25 cursor-pointer hover:bg-white/5' : 'opacity-90 cursor-default'
               }`}
@@ -291,7 +299,12 @@ export function AdminAnalytics({ showToast, onOpenTab }: AdminAnalyticsProps) {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {(
             [
-              { tab: 'users' as const, title: 'User overview', desc: 'Directory, search, user details, learner skills' },
+              {
+                tab: 'users' as const,
+                title: 'User overview',
+                desc: 'Directory, search, user details, learner skills',
+                openUserDetails: true
+              },
               { tab: 'roles' as const, title: 'Job roles', desc: 'Titles, domains, required skills' },
               { tab: 'domains' as const, title: 'Domains', desc: 'Learning paths & categories' },
               { tab: 'skills' as const, title: 'Catalog skills', desc: 'Taxonomy linked to domains' },
@@ -301,7 +314,12 @@ export function AdminAnalytics({ showToast, onOpenTab }: AdminAnalyticsProps) {
             <button
               key={link.tab}
               type="button"
-              onClick={() => onOpenTab(link.tab)}
+              onClick={() =>
+                onOpenTab(
+                  link.tab,
+                  'openUserDetails' in link && link.openUserDetails ? { openUserDetails: true } : undefined
+                )
+              }
               className="flex flex-col items-start text-left rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 px-4 py-3 transition-colors"
             >
               <span className="text-sm font-bold text-white flex items-center gap-1">

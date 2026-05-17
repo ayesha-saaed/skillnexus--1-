@@ -8,6 +8,7 @@ import { AdminInput } from './AdminInput';
 import { AdminSelect } from './AdminSelect';
 import type { ShowToastFn } from './useToast';
 import type { ResourceRow } from '../../types/database';
+import { isValidResourceTitle, validateCommaSeparatedSkills } from '../../lib/inputValidation';
 
 interface Resource extends ResourceRow {}
 
@@ -39,7 +40,8 @@ export function ResourceManagement({ showToast }: { showToast: ShowToastFn }) {
     difficulty: 'Beginner',
     duration: '',
     domain: '',
-    skills_covered: [] as string[]
+    skills_covered: [] as string[],
+    skillsCoveredInput: ''
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -99,13 +101,20 @@ export function ResourceManagement({ showToast }: { showToast: ShowToastFn }) {
   function validateForm() {
     const newErrors: Record<string, string> = {};
     if (!formData.title.trim()) newErrors.title = 'Title is required';
+    else if (!isValidResourceTitle(formData.title.trim())) {
+      newErrors.title = 'Title: 3–120 characters; start with a letter, number, or . + #';
+    }
     if (!formData.description.trim()) newErrors.description = 'Description is required';
     if (!formData.url.trim()) newErrors.url = 'URL is required';
-    try {
-      new URL(formData.url);
-    } catch {
-      newErrors.url = 'Please enter a valid URL';
+    else {
+      try {
+        new URL(formData.url);
+      } catch {
+        newErrors.url = 'Please enter a valid URL';
+      }
     }
+    const skillsCheck = validateCommaSeparatedSkills(formData.skillsCoveredInput);
+    if (!skillsCheck.ok) newErrors.skillsCoveredInput = skillsCheck.error;
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   }
@@ -130,6 +139,7 @@ export function ResourceManagement({ showToast }: { showToast: ShowToastFn }) {
       const token = await getAccessToken();
       if (!token) throw new Error('Unable to authenticate admin session. Please sign in again.');
 
+      const skillsParsed = validateCommaSeparatedSkills(formData.skillsCoveredInput);
       const dataToSave = {
         id: editingId || undefined,
         title: formData.title.trim(),
@@ -139,7 +149,7 @@ export function ResourceManagement({ showToast }: { showToast: ShowToastFn }) {
         difficulty: formData.difficulty,
         duration: formData.duration.trim(),
         domain: formData.domain || 'Full Stack',
-        skills_covered: formData.skills_covered.length > 0 ? formData.skills_covered : []
+        skills_covered: skillsParsed.ok ? skillsParsed.skills : []
       };
 
       const response = await fetch('/api/admin/resources', {
@@ -207,7 +217,8 @@ export function ResourceManagement({ showToast }: { showToast: ShowToastFn }) {
       difficulty: 'Beginner',
       duration: '',
       domain: '',
-      skills_covered: []
+      skills_covered: [],
+      skillsCoveredInput: ''
     });
     setErrors({});
     setEditingId(null);
@@ -222,7 +233,8 @@ export function ResourceManagement({ showToast }: { showToast: ShowToastFn }) {
       difficulty: resource.difficulty,
       duration: resource.duration,
       domain: resource.domain || '',
-      skills_covered: resource.skills_covered || []
+      skills_covered: resource.skills_covered || [],
+      skillsCoveredInput: (resource.skills_covered || []).join(', ')
     });
     setEditingId(resource.id);
     setIsModalOpen(true);
@@ -391,6 +403,13 @@ export function ResourceManagement({ showToast }: { showToast: ShowToastFn }) {
           value={formData.duration}
           onChange={(value) => setFormData({ ...formData, duration: value })}
           placeholder="e.g., 4 weeks, 20 hours"
+        />
+        <AdminInput
+          label="Skills covered (comma-separated)"
+          value={formData.skillsCoveredInput}
+          onChange={(value) => setFormData({ ...formData, skillsCoveredInput: value })}
+          placeholder="e.g. React, TypeScript, HTML"
+          error={errors.skillsCoveredInput}
         />
       </AdminModal>
 

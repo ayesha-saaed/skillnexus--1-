@@ -7,7 +7,13 @@ import { AdminModal } from './AdminModal';
 import { AdminSelect } from './AdminSelect';
 import { AdminInput } from './AdminInput';
 import type { ShowToastFn } from './useToast';
-import { isValidDisplayName, isValidDomainLabel, isValidSkillToken } from '../../lib/inputValidation';
+import {
+  isValidDisplayName,
+  isValidDomainLabel,
+  isValidSkillToken,
+  validateCommaSeparatedBadges
+} from '../../lib/inputValidation';
+import type { AdminTabNavigateOptions } from './adminTab';
 
 interface UserProfile {
   id: string;
@@ -44,9 +50,11 @@ const PROFICIENCY_OPTIONS = [
 
 interface UserManagementProps {
   showToast: ShowToastFn;
+  usersNav?: AdminTabNavigateOptions | null;
+  onUsersNavConsumed?: () => void;
 }
 
-export function UserManagement({ showToast }: UserManagementProps) {
+export function UserManagement({ showToast, usersNav, onUsersNavConsumed }: UserManagementProps) {
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -179,6 +187,13 @@ export function UserManagement({ showToast }: UserManagementProps) {
     setProfileErrors({});
   }
 
+  useEffect(() => {
+    if (!usersNav?.openUserDetails || loading || users.length === 0) return;
+    const target = usersNav.userId ? users.find((u) => u.id === usersNav.userId) : users[0];
+    if (target) openDetails(target);
+    onUsersNavConsumed?.();
+  }, [usersNav, loading, users, onUsersNavConsumed]);
+
   async function handleRoleUpdate() {
     if (!editingId || !formData.role) return;
 
@@ -229,8 +244,10 @@ export function UserManagement({ showToast }: UserManagementProps) {
     const pathTrim = profileForm.active_path_domain.trim();
     if (pathTrim && !isValidDomainLabel(pathTrim)) {
       errs.active_path_domain =
-        "Active path domain: 2–80 characters; start with a letter, number, or . + #; then letters, numbers, spaces, and -&/,+.() and apostrophe (').";
+        'Active path domain: 2–80 characters; start with a letter, number, or . + #; then letters, numbers, spaces, and hyphen, ampersand, slash, comma, plus, period, parentheses.';
     }
+    const badgesCheck = validateCommaSeparatedBadges(profileForm.badges);
+    if (!badgesCheck.ok) errs.badges = badgesCheck.error;
     const levelNum = Math.max(1, parseInt(profileForm.level, 10) || 1);
     const pointsNum = Math.max(0, parseInt(profileForm.points, 10) || 0);
     setProfileErrors(errs);
@@ -244,10 +261,7 @@ export function UserManagement({ showToast }: UserManagementProps) {
 
     try {
       setSavingProfile(true);
-      const badges = profileForm.badges
-        .split(',')
-        .map((b) => b.trim())
-        .filter(Boolean);
+      const badges = badgesCheck.ok ? badgesCheck.badges : [];
       const { error } = await supabase
         .from('profiles')
         .update({
@@ -411,6 +425,7 @@ export function UserManagement({ showToast }: UserManagementProps) {
 
       <AdminTable<UserProfile>
         data={filteredUsers}
+        onRowClick={(user) => openDetails(user)}
         columns={[
           {
             header: 'Name',
@@ -465,7 +480,7 @@ export function UserManagement({ showToast }: UserManagementProps) {
           }
         ]}
         actions={(user) => (
-          <div className="flex gap-2 justify-end">
+          <div className="flex gap-2 justify-end" onClick={(e) => e.stopPropagation()} role="presentation">
             <button
               type="button"
               onClick={() => openDetails(user)}
@@ -553,6 +568,13 @@ export function UserManagement({ showToast }: UserManagementProps) {
                     <p className="text-[10px] font-black uppercase tracking-[0.25em] text-blue-400">User details</p>
                     <h2 className="text-xl font-bold text-white mt-1">{detailsUser.name || detailsUser.email || 'User'}</h2>
                     <p className="text-xs text-zinc-500 font-mono break-all mt-1">{detailsUser.id}</p>
+                    {(profileForm.active_job_role_id || detailsUser.active_job_role_name) && (
+                      <p className="text-xs text-amber-400/90 mt-2">
+                        Job role:{' '}
+                        {jobRoles.find((r) => r.id === profileForm.active_job_role_id)?.role_name ||
+                          detailsUser.active_job_role_name}
+                      </p>
+                    )}
                   </div>
                   <button
                     type="button"
@@ -607,6 +629,7 @@ export function UserManagement({ showToast }: UserManagementProps) {
                         value={profileForm.badges}
                         onChange={(value) => setProfileForm((f) => ({ ...f, badges: value }))}
                         placeholder="e.g. polymath, early_adopter"
+                        error={profileErrors.badges}
                       />
                       <AdminSelect
                         label="Target job role (Gap Checker)"

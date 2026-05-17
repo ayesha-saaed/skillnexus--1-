@@ -4,6 +4,7 @@ import { Key, Users, Briefcase, TrendingUp, Settings, Plus, Trash2, Database, Sh
 import { motion } from 'motion/react';
 import { RoleManagement } from '../components/admin/RoleManagement';
 import { useToast, ToastContainer } from '../components/admin/useToast';
+import { isValidSkillToken, isValidResourceTitle } from '../lib/inputValidation';
 
 interface AdminProps {
   onNavigate: (page: any) => void;
@@ -50,6 +51,20 @@ export function Admin({ onNavigate }: AdminProps) {
   async function handleAddResource() {
     if (!newRes.title.trim() || !newRes.url.trim() || !newRes.skill.trim()) {
       alert('Resource title, URL, and linked skill are required.');
+      return;
+    }
+    if (!isValidResourceTitle(newRes.title.trim())) {
+      alert('Resource title: 3–120 characters; start with a letter, number, or . + #');
+      return;
+    }
+    if (!isValidSkillToken(newRes.skill.trim())) {
+      alert('Linked skill: 2–80 characters; start with a letter, number, or . + #');
+      return;
+    }
+    try {
+      new URL(newRes.url.trim());
+    } catch {
+      alert('Please enter a valid resource URL.');
       return;
     }
 

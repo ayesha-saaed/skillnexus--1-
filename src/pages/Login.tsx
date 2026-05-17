@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { motion } from 'framer-motion';
 import { Mail, Lock, AlertCircle, Chrome } from 'lucide-react';
+import { isValidEmail, PASSWORD_REGEX } from '../lib/inputValidation';
 
 interface LoginProps {
   onNavigate: (page: 'login' | 'register' | 'dashboard') => void;
@@ -15,18 +16,15 @@ export function Login({ onNavigate }: LoginProps) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
-
   const validateEmail = (value: string) => {
     if (!value) return 'Email is required';
-    if (!emailRegex.test(value)) return 'Please enter a valid email address';
+    if (!isValidEmail(value)) return 'Please enter a valid email address';
     return '';
   };
 
   const validatePassword = (value: string) => {
     if (!value) return 'Password is required';
-    if (!passwordRegex.test(value)) return 'Password must be 8+ chars with uppercase, lowercase, number, and special char (@$!%*?&)';
+    if (!PASSWORD_REGEX.test(value)) return 'Password must be 8+ chars with uppercase, lowercase, number, and special char (@$!%*?&)';
     return '';
   };
 
