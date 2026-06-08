@@ -41,9 +41,6 @@ const supabaseAdmin = (supabaseUrl && supabaseServiceKey)
   ? createClient(supabaseUrl, supabaseServiceKey)
   : null;
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
 if (!supabaseAdmin) {
   throw new Error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY / SUPABASE_SECRET_KEY");
 }
@@ -215,7 +212,16 @@ app.post('/api/ai/skill-agent', requireAuth, rateLimiter(12, 60_000), async (req
   } catch (error: any) {
     console.error('AI Service Error:', error?.message, error?.stack);
     auditLog('ai.skill-agent.error', { message: error?.message || 'Unknown AI error' });
-    return apiError(res, 500, 'SERVER_ERROR', 'AI request failed', error?.message);
+    const raw = String(error?.message || '');
+    const isQuota =
+      raw.includes('429') ||
+      raw.includes('quota') ||
+      raw.includes('RESOURCE_EXHAUSTED') ||
+      raw.includes('rate limit');
+    const message = isQuota
+      ? 'AI quota exceeded. Check your Gemini API billing/plan or try again later.'
+      : 'AI request failed';
+    return apiError(res, isQuota ? 503 : 500, 'SERVER_ERROR', message, raw.slice(0, 300));
   }
 });
 

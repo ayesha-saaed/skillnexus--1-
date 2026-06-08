@@ -306,7 +306,7 @@ export function UserManagement({ showToast, usersNav, onUsersNavConsumed }: User
         'Active path domain: 2–80 characters; start with a letter, number, or . + #; then letters, numbers, spaces, and hyphen, ampersand, slash, comma, plus, period, parentheses.';
     }
     const badgesCheck = validateCommaSeparatedBadges(profileForm.badges);
-    if (!badgesCheck.ok) errs.badges = badgesCheck.error;
+    if (badgesCheck.ok === false) errs.badges = badgesCheck.error;
     if (!isValidProfileRole(profileForm.role)) {
       errs.role = 'Role must be student, admin, or moderator.';
     }

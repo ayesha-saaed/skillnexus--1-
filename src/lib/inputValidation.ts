@@ -195,15 +195,15 @@ export function validateCommaSeparatedSkills(
   input: string
 ): { ok: true; skills: string[] } | { ok: false; error: string } {
   const raw = input.trim();
-  if (!raw) return { ok: true, skills: [] };
+  if (!raw) return { ok: true as const, skills: [] };
   const parts = raw.split(',').map((p) => p.trim()).filter(Boolean);
   for (const p of parts) {
     const err = skillTokenError(p);
     if (err) {
-      return { ok: false, error: `Invalid skill "${p}". ${MSG_SKILL}` };
+      return { ok: false as const, error: `Invalid skill "${p}". ${MSG_SKILL}` };
     }
   }
-  return { ok: true, skills: parts };
+  return { ok: true as const, skills: parts };
 }
 
 export function validateSkillNameList(
@@ -212,25 +212,37 @@ export function validateSkillNameList(
   for (const p of skills) {
     const err = skillTokenError(p);
     if (err) {
-      return { ok: false, error: `Invalid skill "${p}". ${MSG_SKILL}` };
+      return { ok: false as const, error: `Invalid skill "${p}". ${MSG_SKILL}` };
     }
   }
-  return { ok: true, skills };
+  return { ok: true as const, skills };
 }
 
 export function validateCommaSeparatedBadges(
   input: string
 ): { ok: true; badges: string[] } | { ok: false; error: string } {
   const raw = input.trim();
-  if (!raw) return { ok: true, badges: [] };
+  if (!raw) return { ok: true as const, badges: [] };
   const parts = raw.split(',').map((p) => p.trim().toLowerCase()).filter(Boolean);
   for (const p of parts) {
     if (!isValidBadgeToken(p)) {
       return {
-        ok: false,
+        ok: false as const,
         error: `Invalid badge "${p}". Use 2–32 lowercase letters, numbers, and underscores (e.g. polymath, early_adopter).`
       };
     }
   }
-  return { ok: true, badges: parts };
+  return { ok: true as const, badges: parts };
+}
+
+export function commaSeparatedSkillsValidationError(input: string): string | null {
+  const result = validateCommaSeparatedSkills(input);
+  if ('error' in result) return result.error;
+  return null;
+}
+
+export function commaSeparatedBadgesValidationError(input: string): string | null {
+  const result = validateCommaSeparatedBadges(input);
+  if ('error' in result) return result.error;
+  return null;
 }

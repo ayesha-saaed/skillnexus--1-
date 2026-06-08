@@ -15,6 +15,7 @@ interface SkillAgentProps {
 
 export function SkillAgent({ user }: SkillAgentProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [aiOnline, setAiOnline] = useState<boolean | null>(null);
   const [userSkills, setUserSkills] = useState<string[]>([]);
   const [messages, setMessages] = useState<Message[]>([
     { role: 'assistant', content: "Hello! I'm your Nexus Intelligence Agent. I can help you with career domains, market trends, learning timelines, and skill analysis. How can I assist you today?" }
@@ -22,6 +23,23 @@ export function SkillAgent({ user }: SkillAgentProps) {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/health');
+        const data = await res.json();
+        if (!cancelled) setAiOnline(Boolean(data?.geminiConfigured && data?.status === 'ok'));
+      } catch {
+        if (!cancelled) setAiOnline(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen]);
 
   useEffect(() => {
     const fetchUserSkills = async () => {
@@ -73,7 +91,8 @@ export function SkillAgent({ user }: SkillAgentProps) {
 
       const result = await response.json();
       if (!response.ok) {
-        throw new Error(result?.error?.message || 'AI service error');
+        const msg = result?.error?.message || result?.message || 'AI service error';
+        throw new Error(msg);
       }
 
       setMessages(prev => [...prev, { role: 'assistant', content: result.answer || 'I could not generate a response.' }]);
@@ -125,8 +144,10 @@ export function SkillAgent({ user }: SkillAgentProps) {
                 <div>
                   <h3 className="text-sm font-bold text-white uppercase tracking-widest">Nexus Agent</h3>
                   <div className="flex items-center gap-1.5">
-                    <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></div>
-                    <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-tighter">System Online</span>
+                    <div className={`w-1.5 h-1.5 rounded-full ${aiOnline === false ? 'bg-rose-500' : 'bg-emerald-500 animate-pulse'}`}></div>
+                    <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-tighter">
+                      {aiOnline === null ? 'Checking…' : aiOnline ? 'System Online' : 'AI Unavailable'}
+                    </span>
                   </div>
                 </div>
               </div>

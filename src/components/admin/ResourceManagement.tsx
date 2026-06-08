@@ -16,7 +16,8 @@ import {
   isPlaceholderResourceUrl,
   isValidResourceType,
   isValidResourceDifficulty,
-  validateCommaSeparatedSkills
+  validateCommaSeparatedSkills,
+  commaSeparatedSkillsValidationError
 } from '../../lib/inputValidation';
 
 interface Resource extends ResourceRow {}
@@ -143,7 +144,7 @@ export function ResourceManagement({ showToast }: { showToast: ShowToastFn }) {
       newErrors.difficulty = 'Choose Beginner, Intermediate, or Advanced.';
     }
     const skillsCheck = validateCommaSeparatedSkills(formData.skillsCoveredInput);
-    if (!skillsCheck.ok) newErrors.skillsCoveredInput = skillsCheck.error;
+    if (skillsCheck.ok === false) newErrors.skillsCoveredInput = skillsCheck.error;
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   }
@@ -523,10 +524,7 @@ export function ResourceManagement({ showToast }: { showToast: ShowToastFn }) {
           onChange={(value) => setFormData({ ...formData, skillsCoveredInput: value })}
           placeholder="e.g. React, TypeScript, HTML"
           error={errors.skillsCoveredInput}
-          validator={(value) => {
-            const check = validateCommaSeparatedSkills(value);
-            return check.ok ? null : check.error;
-          }}
+          validator={commaSeparatedSkillsValidationError}
           onValidated={(err) => setErrors((prev) => ({ ...prev, skillsCoveredInput: err ?? '' }))}
         />
       </AdminModal>

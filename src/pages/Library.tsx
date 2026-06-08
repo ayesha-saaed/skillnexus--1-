@@ -194,14 +194,34 @@ export function Library({ onNavigate }: LibraryProps) {
     status: 'Not Started' | 'In Progress' | 'Completed',
     incProgress: number
   ) {
-    setProgress((prev) => ({
-      ...prev,
-      [resourceId]: {
+    try {
+      const user = await getCurrentUser();
+      if (!user) return;
+
+      const prevEntry = progress[resourceId];
+      const timeSpent = (prevEntry?.timeSpent || 0) + 1;
+      const lastUpdated = new Date().toISOString();
+
+      await learningService.updateProgress(user.id, resourceId, {
         status,
         progress: incProgress,
-        timeSpent: (prev[resourceId]?.timeSpent || 0) + 1
-      }
-    }));
+        timeSpent
+      });
+
+      setProgress((prev) => ({
+        ...prev,
+        [resourceId]: {
+          userId: user.id,
+          resourceId,
+          status,
+          progress: incProgress,
+          timeSpent,
+          lastUpdated
+        }
+      }));
+    } catch (error) {
+      console.error('Failed to update progress:', error);
+    }
   }
 
   const hasActivePath = Boolean(careerPath?.roleName || readActivePathFromStorage().roleName);

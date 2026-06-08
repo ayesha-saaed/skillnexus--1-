@@ -10,7 +10,8 @@ import type { ShowToastFn } from './useToast';
 import {
   jobRoleTitleError,
   domainLabelError,
-  validateCommaSeparatedSkills
+  validateCommaSeparatedSkills,
+  commaSeparatedSkillsValidationError
 } from '../../lib/inputValidation';
 import { resourcesForJobRole, countLabel, type ResourceLike } from '../../lib/resourceLinking';
 interface JobRole {
@@ -100,7 +101,7 @@ export function RoleManagement({ showToast }: { showToast: ShowToastFn }) {
     const domainErr = domainLabelError(formData.domain);
     if (domainErr) newErrors.domain = domainErr;
     const skillsCheck = validateCommaSeparatedSkills(formData.requiredSkills);
-    if (!skillsCheck.ok) newErrors.requiredSkills = skillsCheck.error;
+    if (skillsCheck.ok === false) newErrors.requiredSkills = skillsCheck.error;
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   }
@@ -378,10 +379,7 @@ export function RoleManagement({ showToast }: { showToast: ShowToastFn }) {
           onChange={(value) => setFormData({ ...formData, requiredSkills: value })}
           placeholder="Comma-separated skills, e.g. HTML, CSS, JavaScript"
           error={errors.requiredSkills}
-          validator={(value) => {
-            const check = validateCommaSeparatedSkills(value);
-            return check.ok ? null : check.error;
-          }}
+          validator={commaSeparatedSkillsValidationError}
           onValidated={(err) => setErrors((prev) => ({ ...prev, requiredSkills: err ?? '' }))}
         />
       </AdminModal>
