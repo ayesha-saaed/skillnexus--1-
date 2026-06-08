@@ -1,4 +1,4 @@
-export type AdminTab = 'overview' | 'roles' | 'domains' | 'skills' | 'resources' | 'users';
+export type AdminTab = 'overview' | 'roles' | 'domains' | 'skills' | 'market-trends' | 'resources' | 'users';
 
 /** Optional behavior when switching tabs from Overview navigation. */
 export type AdminTabNavigateOptions = {

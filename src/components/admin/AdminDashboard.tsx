@@ -92,6 +92,7 @@ export function AdminDashboard({ onNavigate }: AdminDashboardProps) {
     { id: 'roles', label: 'Roles', icon: Briefcase },
     { id: 'domains', label: 'Domains', icon: Database },
     { id: 'skills', label: 'Skills', icon: PackageOpen },
+    // Market Trends admin removed to avoid runtime/schema errors
     { id: 'resources', label: 'Resources', icon: PackageOpen },
     { id: 'users', label: 'Users', icon: Users }
   ];
@@ -179,6 +180,7 @@ export function AdminDashboard({ onNavigate }: AdminDashboardProps) {
           {activeTab === 'roles' && <RoleManagement showToast={showToast} />}
           {activeTab === 'domains' && <DomainManagement showToast={showToast} />}
           {activeTab === 'skills' && <SkillManagement showToast={showToast} />}
+          {/* Market Trends removed */}
           {activeTab === 'resources' && <ResourceManagement showToast={showToast} />}
           {activeTab === 'users' && (
             <UserManagement

@@ -105,7 +105,7 @@ export default function App() {
       case 'register': return <Register onNavigate={setCurrentPage} />;
       case 'dashboard': return <Dashboard user={user!} onNavigate={setCurrentPage} />;
       case 'analysis': return <SkillAnalysis user={user!} onNavigate={setCurrentPage} />;
-      case 'trends': return <IndustryTrends onNavigate={setCurrentPage} />;
+      case 'trends': return <IndustryTrends onNavigate={setCurrentPage} user={user} />;
       case 'add-skill': return <AddSkill onNavigate={setCurrentPage} user={user!} />;
       case 'library': return <Library onNavigate={setCurrentPage} />;
       case 'admin': return <AdminDashboard onNavigate={setCurrentPage} />;

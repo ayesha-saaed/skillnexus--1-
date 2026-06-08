@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { learningService } from '../services/learningService';
+import { supabase } from '../lib/supabase';
 import { 
   LineChart as RechartsLineChart,
   Line,
@@ -18,12 +19,23 @@ import {
 } from 'recharts';
 import { TrendingUp, Flame, Globe, Zap, Info, ArrowUpRight, BarChart3, Lightbulb, Compass, Target } from 'lucide-react';
 import { motion } from 'framer-motion';
+import type { User } from '../lib/firebase';
+
+const defaultTrajectoryData = [
+  { month: 'Jan', React: 0.3, Nodejs: 0.1, Python: 0.0 },
+  { month: 'Feb', React: 0.4, Nodejs: 0.2, Python: 0.1 },
+  { month: 'Mar', React: 0.6, Nodejs: 0.4, Python: 0.3 },
+  { month: 'Apr', React: 0.7, Nodejs: 0.6, Python: 0.5 },
+  { month: 'May', React: 0.85, Nodejs: 0.7, Python: 0.7 },
+  { month: 'Jun', React: 0.95, Nodejs: 0.8, Python: 0.85 },
+];
 
 interface IndustryTrendsProps {
   onNavigate: (page: any) => void;
+  user?: User | null;
 }
 
-export function IndustryTrends({ onNavigate }: IndustryTrendsProps) {
+export function IndustryTrends({ onNavigate, user }: IndustryTrendsProps) {
   const [trends, setTrends] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeMetric, setActiveMetric] = useState<'demand' | 'growth'>('demand');
@@ -40,42 +52,76 @@ export function IndustryTrends({ onNavigate }: IndustryTrendsProps) {
   useEffect(() => {
     async function fetchTrajectory() {
       try {
-        const traj = await learningService.getSkillTrajectory('demo-user-id'); // Mock user
-        setTrajectoryData(traj);
+        if (!user?.id) {
+          setTrajectoryData(defaultTrajectoryData);
+          return;
+        }
+
+        const traj = await learningService.getSkillTrajectory(user.id);
+        setTrajectoryData(traj && traj.length > 0 ? traj : defaultTrajectoryData);
       } catch {
-        // Mock fallback already in service
-        setTrajectoryData([
-          { month: 'Jan', React: 0.3, Nodejs: 0.1, Python: 0.0 },
-          { month: 'Feb', React: 0.4, Nodejs: 0.2, Python: 0.1 },
-          { month: 'Mar', React: 0.6, Nodejs: 0.4, Python: 0.3 },
-          { month: 'Apr', React: 0.7, Nodejs: 0.6, Python: 0.5 },
-          { month: 'May', React: 0.85, Nodejs: 0.7, Python: 0.7 },
-          { month: 'Jun', React: 0.95, Nodejs: 0.8, Python: 0.85 },
-        ]);
+        setTrajectoryData(defaultTrajectoryData);
       }
     }
     fetchTrajectory();
-  }, []);
+  }, [user?.id]);
+
+  async function loadAdminMarketTrendSkills() {
+    try {
+      const { data: cfg, error } = await supabase.from('trends').select('*').order('demand_score', { ascending: false });
+      if (!error && Array.isArray(cfg) && cfg.length > 0) {
+        return cfg.map((c: any) => ({
+          skillName: c.skill_name,
+          demandScore: c.demand_score || 0,
+          growth: typeof c.growth === 'number' ? `${c.growth > 0 ? '+' : ''}${c.growth}%` : (c.growth || '+5%'),
+          forecast: 'Custom'
+        }));
+      }
+    } catch (err) {
+      console.warn('Admin market trend skill fetch failed:', err);
+    }
+
+    const raw = localStorage.getItem('trends_local');
+    const local = raw ? JSON.parse(raw) : [];
+    return (local || []).map((c: any) => ({
+      skillName: c.skill_name,
+      demandScore: c.demand_score || c.demandScore || 0,
+      growth: typeof c.growth === 'number' ? `${c.growth > 0 ? '+' : ''}${c.growth}%` : (c.growth || '+5%'),
+      forecast: 'Local'
+    }));
+  }
 
   useEffect(() => {
     async function fetchTrends() {
       try {
         const resp = await fetch('/api/industry-trends');
         const data = await resp.json();
-        if (Array.isArray(data)) {
-          // Add some mock growth data for visual variety if missing
-          const enriched = data.map(t => ({
-            ...t,
-            growth: t.demandScore > 90 ? '+12%' : t.demandScore > 85 ? '+8%' : '+5%',
-            forecast: 'High'
-          }));
-          setTrends(enriched);
-        } else {
-          setTrends([]);
+
+        const apiTrends = Array.isArray(data)
+          ? data.map((t: any) => ({
+              ...t,
+              growth: t.growth || (t.demandScore > 90 ? '+12%' : t.demandScore > 85 ? '+8%' : '+5%'),
+              forecast: 'High'
+            }))
+          : [];
+
+        const adminTrends = await loadAdminMarketTrendSkills();
+        const merged = [
+          ...adminTrends.filter((admin) =>
+            !apiTrends.some((api) => String(api.skillName).toLowerCase() === String(admin.skillName).toLowerCase())
+          ),
+          ...apiTrends
+        ];
+
+        if (!merged.find((x) => x.skillName === 'AI Agent Engineering')) {
+          merged.unshift({ skillName: 'AI Agent Engineering', demandScore: 94, growth: '+12%', forecast: 'High' });
         }
+
+        setTrends(merged.length > 0 ? merged : adminTrends);
       } catch (e) {
         console.error('Market data fetch failed:', e);
-        setTrends([]); // Rely on live data
+        const adminTrends = await loadAdminMarketTrendSkills();
+        setTrends(adminTrends);
       } finally {
         setLoading(false);
       }
@@ -180,13 +226,13 @@ export function IndustryTrends({ onNavigate }: IndustryTrendsProps) {
         <div className="bg-gradient-to-r from-blue-600/20 to-emerald-600/20 border-b border-white/10 p-6 uppercase tracking-widest">
           <div className="flex items-center gap-3">
             <Flame className="w-6 h-6 text-yellow-400 drop-shadow-lg" />
-            <h2 className="text-xl font-black text-white">Top 10 Skills by Demand Score</h2>
+            <h2 className="text-xl font-black text-white">Top Skills Demand by Industries</h2>
             <div className="ml-auto flex items-center gap-2 text-xs bg-white/10 px-3 py-1 rounded-full">
               <TrendingUp className="w-3 h-3" />
               Live Market Data
             </div>
           </div>
-          <p className="text-blue-200/80 text-sm mt-1 font-medium">Ranked by current demand score • Updated via global job market intelligence</p>
+          <p className="text-blue-200/80 text-sm mt-1 font-medium">Ranked by demand score across industries • Updated via global job market intelligence</p>
         </div>
 
         <div className="divide-y divide-white/5">
@@ -280,30 +326,21 @@ export function IndustryTrends({ onNavigate }: IndustryTrendsProps) {
                       labelStyle={{ color: 'white', fontWeight: 'bold' }}
                       itemStyle={{ color: 'white' }} 
                     />
-                    <Line 
-                      type="monotone" 
-                      dataKey="React" 
-                      stroke="#10b981" 
-                      strokeWidth={3} 
-                      dot={{ fill: '#10b981', strokeWidth: 2 }} 
-                      name="React"
-                    />
-                    <Line 
-                      type="monotone" 
-                      dataKey="Nodejs" 
-                      stroke="#3b82f6" 
-                      strokeWidth={3} 
-                      dot={{ fill: '#3b82f6', strokeWidth: 2 }} 
-                      name="Node.js"
-                    />
-                    <Line 
-                      type="monotone" 
-                      dataKey="Python" 
-                      stroke="#f59e0b" 
-                      strokeWidth={3} 
-                      dot={{ fill: '#f59e0b', strokeWidth: 2 }} 
-                      name="Python"
-                    />
+                    {
+                      // Determine which skill keys are present in the trajectory data (exclude the month key)
+                      (trajectoryData && trajectoryData.length > 0 ? Object.keys(trajectoryData[0]).filter(k => k !== 'month') : ['React','Nodejs','Python'])
+                        .map((key, i) => (
+                          <Line
+                            key={key}
+                            type="monotone"
+                            dataKey={key}
+                            stroke={COLORS[i % COLORS.length]}
+                            strokeWidth={3}
+                            dot={{ fill: COLORS[i % COLORS.length], strokeWidth: 2 }}
+                            name={key}
+                          />
+                        ))
+                    }
                     <Legend />
                   </RechartsLineChart>
                 </ResponsiveContainer>
