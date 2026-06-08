@@ -29,6 +29,10 @@ import {
   MSG_DESCRIPTION
 } from "./src/lib/inputValidation";
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+dotenv.config({ path: path.resolve(__dirname, '.env.local') });
 dotenv.config();
 
 const supabaseUrl = process.env.SUPABASE_URL;
@@ -152,8 +156,20 @@ const rateLimiter = (limit: number, windowMs: number): express.RequestHandler =>
   };
 };
 
+app.get('/api/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    geminiConfigured: !!aiClient,
+    geminiKey: process.env.GEMINI_API_KEY ? 'SET' : 'MISSING',
+    model: aiModel
+  });
+});
+
 app.post('/api/ai/skill-agent', requireAuth, rateLimiter(12, 60_000), async (req, res) => {
-  if (!aiClient) return apiError(res, 500, 'SERVER_ERROR', 'AI service not configured');
+  if (!aiClient) {
+    console.error('AI client not initialized. GEMINI_API_KEY:', process.env.GEMINI_API_KEY ? 'SET' : 'MISSING');
+    return apiError(res, 500, 'SERVER_ERROR', 'AI service not configured');
+  }
   const parsed = aiRequestSchema.safeParse(req.body);
   if (!parsed.success) {
     return apiError(res, 400, 'VALIDATION_ERROR', 'Invalid AI request payload', parsed.error.flatten());
@@ -177,6 +193,7 @@ app.post('/api/ai/skill-agent', requireAuth, rateLimiter(12, 60_000), async (req
   ].join('\n\n');
 
   try {
+    console.log('Calling Gemini API with model:', aiModel);
     const response = await aiClient.models.generateContent({
       model: aiModel,
       contents: [
@@ -196,6 +213,7 @@ app.post('/api/ai/skill-agent', requireAuth, rateLimiter(12, 60_000), async (req
     auditLog('ai.skill-agent', { userId: (req as AuthedRequest).authUser?.id, prompt: parsed.data.prompt.slice(0, 200) });
     return res.json({ answer });
   } catch (error: any) {
+    console.error('AI Service Error:', error?.message, error?.stack);
     auditLog('ai.skill-agent.error', { message: error?.message || 'Unknown AI error' });
     return apiError(res, 500, 'SERVER_ERROR', 'AI request failed', error?.message);
   }

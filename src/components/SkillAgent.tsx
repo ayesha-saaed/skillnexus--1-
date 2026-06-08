@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { MessageSquare, X, Send, Bot, User, Loader2, TrendingUp, Calendar, Map } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import type { User as FirebaseUser } from '../lib/firebase';
-import { supabase } from '../lib/firebase';
+import { supabase, getAccessToken } from '../lib/firebase';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -57,9 +57,17 @@ export function SkillAgent({ user }: SkillAgentProps) {
     };
 
     try {
+      const token = await getAccessToken();
+      if (!token) {
+        throw new Error('Authentication required. Please log in to use AI Agent.');
+      }
+
       const response = await fetch('/api/ai/skill-agent', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify(payload)
       });
 
@@ -71,7 +79,8 @@ export function SkillAgent({ user }: SkillAgentProps) {
       setMessages(prev => [...prev, { role: 'assistant', content: result.answer || 'I could not generate a response.' }]);
     } catch (error) {
       console.error('AI Agent Error:', error);
-      setMessages(prev => [...prev, { role: 'assistant', content: 'Connection to Nexus Intelligence interrupted. Please try again.' }]);
+      const errorMsg = error instanceof Error ? error.message : 'Connection to Nexus Intelligence interrupted.';
+      setMessages(prev => [...prev, { role: 'assistant', content: `Error: ${errorMsg} Please try again.` }]);
     } finally {
       setLoading(false);
     }
