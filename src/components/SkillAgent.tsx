@@ -3,6 +3,7 @@ import { MessageSquare, X, Send, Bot, User, Loader2, TrendingUp, Calendar, Map }
 import { motion, AnimatePresence } from 'motion/react';
 import type { User as FirebaseUser } from '../lib/firebase';
 import { supabase, getAccessToken } from '../lib/firebase';
+import { AgentMessageContent } from './AgentMessageContent';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -99,7 +100,7 @@ export function SkillAgent({ user }: SkillAgentProps) {
     } catch (error) {
       console.error('AI Agent Error:', error);
       const errorMsg = error instanceof Error ? error.message : 'Connection to Nexus Intelligence interrupted.';
-      setMessages(prev => [...prev, { role: 'assistant', content: `Error: ${errorMsg} Please try again.` }]);
+      setMessages(prev => [...prev, { role: 'assistant', content: `Unable to respond: ${errorMsg}` }]);
     } finally {
       setLoading(false);
     }
@@ -170,12 +171,12 @@ export function SkillAgent({ user }: SkillAgentProps) {
                     <div className={`w-8 h-8 rounded-lg flex-shrink-0 flex items-center justify-center ${m.role === 'user' ? 'bg-zinc-800' : 'bg-indigo-600/20'}`}>
                       {m.role === 'user' ? <User className="w-4 h-4 text-zinc-400" /> : <Bot className="w-4 h-4 text-indigo-400" />}
                     </div>
-                    <div className={`p-4 rounded-2xl text-sm leading-relaxed ${
+                  <div className={`min-w-0 p-4 rounded-2xl ${
                       m.role === 'user' 
                         ? 'bg-indigo-600 text-white rounded-tr-none' 
                         : 'bg-white/5 text-zinc-300 border border-white/5 rounded-tl-none'
                     }`}>
-                      {m.content}
+                      <AgentMessageContent content={m.content} variant={m.role} />
                     </div>
                   </div>
                 </div>

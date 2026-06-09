@@ -135,6 +135,130 @@ const aiApiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || nul
 const aiModel = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 const aiClient = aiApiKey ? new GoogleGenAI({ apiKey: aiApiKey }) : null;
 
+const SKILL_AGENT_SYSTEM = `You are the SkillNexus career intelligence assistant.
+
+Reply in clear, structured plain text (no markdown symbols like **, ##, or code fences).
+
+Use exactly this layout:
+
+Summary
+One or two short sentences answering the question directly.
+
+Timeline
+A realistic estimate (e.g. "6–12 months part-time").
+
+Key steps
+• First actionable step
+• Second step
+• Third step
+
+Next action
+One specific thing the user should do this week.
+
+Rules:
+- Keep the full answer under 220 words.
+- Reference the user's listed skills when relevant.
+- Be practical and encouraging, not generic.
+- Complete every section; never stop mid-sentence.`;
+
+function extractGeminiText(response: unknown): string {
+  const r = response as {
+    text?: string;
+    candidates?: Array<{ content?: { parts?: Array<{ text?: string; thought?: boolean }> } }>;
+  };
+  if (typeof r.text === 'string' && r.text.trim()) return r.text.trim();
+
+  const parts = r.candidates?.[0]?.content?.parts ?? [];
+  const text = parts
+    .filter((p) => !p.thought)
+    .map((p) => p.text ?? '')
+    .join('')
+    .trim();
+  return text || 'I could not generate an answer at this time.';
+}
+
+const AI_MODEL_CANDIDATES = Array.from(
+  new Set(
+    [
+      aiModel,
+      process.env.GEMINI_FALLBACK_MODEL,
+      'gemini-2.5-flash-lite',
+      'gemini-2.5-flash'
+    ].filter((m): m is string => Boolean(m))
+  )
+);
+
+function isRetryableGeminiError(message: string): boolean {
+  const m = message.toLowerCase();
+  return (
+    m.includes('503') ||
+    m.includes('unavailable') ||
+    m.includes('high demand') ||
+    m.includes('429') ||
+    m.includes('quota') ||
+    m.includes('resource_exhausted') ||
+    m.includes('rate limit')
+  );
+}
+
+async function generateAgentAnswer(promptText: string): Promise<{ answer: string; model: string }> {
+  if (!aiClient) throw new Error('AI service not configured');
+
+  let lastError = 'AI request failed';
+
+  for (const model of AI_MODEL_CANDIDATES) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        if (attempt > 0) {
+          await new Promise((resolve) => setTimeout(resolve, 900 * attempt));
+        }
+        console.log(`Calling Gemini API with model: ${model}${attempt ? ` (retry ${attempt})` : ''}`);
+        const response = await aiClient.models.generateContent({
+          model,
+          contents: [{ role: 'user', parts: [{ text: promptText }] }],
+          config: {
+            temperature: 0.35,
+            maxOutputTokens: 1024,
+            topP: 0.9
+          }
+        });
+        return { answer: extractGeminiText(response), model };
+      } catch (error: unknown) {
+        lastError = String((error as { message?: string })?.message || error || 'AI request failed');
+        console.warn(`Gemini ${model} failed:`, lastError.slice(0, 200));
+        if (!isRetryableGeminiError(lastError)) break;
+      }
+    }
+  }
+
+  throw new Error(lastError);
+}
+
+function geminiErrorMessage(raw: string): { status: number; message: string } {
+  const lower = raw.toLowerCase();
+  if (
+    lower.includes('429') ||
+    lower.includes('quota') ||
+    lower.includes('resource_exhausted')
+  ) {
+    return {
+      status: 503,
+      message: 'AI quota exceeded. Check your Gemini API billing/plan or try again later.'
+    };
+  }
+  if (
+    lower.includes('503') ||
+    lower.includes('unavailable') ||
+    lower.includes('high demand')
+  ) {
+    return {
+      status: 503,
+      message: 'AI is busy right now. Please wait a few seconds and try again.'
+    };
+  }
+  return { status: 500, message: 'AI request failed. Please try again in a moment.' };
+}
+
 const rateLimiter = (limit: number, windowMs: number): express.RequestHandler => {
   const store = new Map<string, { count: number; resetAt: number }>();
   return (req, res, next) => {
@@ -185,43 +309,24 @@ app.post('/api/ai/skill-agent', requireAuth, rateLimiter(12, 60_000), async (req
   }
 
   const prompt = [
-    'You are a trusted career intelligence assistant for SkillNexus. Provide concise, actionable guidance, highlight high-demand skills, and keep recommendations grounded in evidence and safe best practices.',
+    SKILL_AGENT_SYSTEM,
     fullPrompt
   ].join('\n\n');
 
   try {
-    console.log('Calling Gemini API with model:', aiModel);
-    const response = await aiClient.models.generateContent({
-      model: aiModel,
-      contents: [
-        {
-          role: 'user',
-          parts: [{ text: prompt }]
-        }
-      ],
-      config: {
-        temperature: 0.35,
-        maxOutputTokens: 512,
-        topP: 0.9
-      }
+    const { answer, model: usedModel } = await generateAgentAnswer(prompt);
+    auditLog('ai.skill-agent', {
+      userId: (req as AuthedRequest).authUser?.id,
+      prompt: parsed.data.prompt.slice(0, 200),
+      model: usedModel
     });
-
-    const answer = (response as any).text || (response as any)?.output?.[0]?.content?.[0]?.text || 'I could not generate an answer at this time.';
-    auditLog('ai.skill-agent', { userId: (req as AuthedRequest).authUser?.id, prompt: parsed.data.prompt.slice(0, 200) });
     return res.json({ answer });
-  } catch (error: any) {
-    console.error('AI Service Error:', error?.message, error?.stack);
-    auditLog('ai.skill-agent.error', { message: error?.message || 'Unknown AI error' });
-    const raw = String(error?.message || '');
-    const isQuota =
-      raw.includes('429') ||
-      raw.includes('quota') ||
-      raw.includes('RESOURCE_EXHAUSTED') ||
-      raw.includes('rate limit');
-    const message = isQuota
-      ? 'AI quota exceeded. Check your Gemini API billing/plan or try again later.'
-      : 'AI request failed';
-    return apiError(res, isQuota ? 503 : 500, 'SERVER_ERROR', message, raw.slice(0, 300));
+  } catch (error: unknown) {
+    const raw = String((error as { message?: string })?.message || error || 'Unknown AI error');
+    console.error('AI Service Error:', raw);
+    auditLog('ai.skill-agent.error', { message: raw.slice(0, 300) });
+    const { status, message } = geminiErrorMessage(raw);
+    return apiError(res, status, 'SERVER_ERROR', message, raw.slice(0, 300));
   }
 });
 
