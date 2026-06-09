@@ -132,7 +132,7 @@ const requireAdmin: express.RequestHandler = async (req, res, next) => {
 };
 
 const aiApiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || null;
-const aiModel = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
+const aiModel = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 const aiClient = aiApiKey ? new GoogleGenAI({ apiKey: aiApiKey }) : null;
 
 const rateLimiter = (limit: number, windowMs: number): express.RequestHandler => {
