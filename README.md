@@ -65,6 +65,10 @@ The platform combines Artificial Intelligence, skill analysis, learning recommen
 
 ### Database & Authentication
 - Supabase
+<<<<<<< HEAD
+=======
+- Firebase
+>>>>>>> 5f3573f15f7a3ec7b4f10994b0da145279518292
 
 ### AI & Analytics
 - Google Gemini AI
